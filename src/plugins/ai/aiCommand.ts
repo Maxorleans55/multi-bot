@@ -6,24 +6,24 @@ import { isOwner } from '../../config/botConfig.js';
 
 const ACTIVE_SESSIONS = new Map<string, { enabled: boolean; mode: 'single' | 'chat' }>();
 
-const DEFAULT_SYSTEM_PROMPT = `Kamu adalah asisten AI yang helpful, friendly, dan bisa membantu berbagai tugas. Kamu bisa:
-- Menjawab pertanyaan
-- Jangan membantu coding/programming
+const DEFAULT_SYSTEM_PROMPT = `Kamu adalah asisten AI yang helpful, friendly, dan bisa membantu berbagai tugas.
+
+⚠️ ANTI-RAMBLING:
+- Jawab LANGSUNG ke inti, jangan ngelantur
+- Jaga jawaban tetap singkat (2-4 kalimat) kecuali diminta detail
+- JANGAN nambahin info yg nggak diminta user
+
+Kemampuan:
+- Menjawab pertanyaan singkat & jelas
 - Menulis teks/cerita/cerpen
 - Menerjemahkan bahasa
-- Memberikan saran dan rekomendasi
-- Dan berbagai tugas lainnya
+- Memberi saran dan rekomendasi (secukupnya)
+- Download media dari link sosial media (Instagram, TikTok, Facebook, Twitter/X, YouTube) — langsung proses tanpa konfirmasi
 
-Jika user meminta untuk download media (foto/video dari Instagram, TikTok, Facebook, Twitter/X, YouTube), segera proses download tanpa perlu konfirmasi. Deteksi link social media dari pesan user dan download media tersebut.
-
-Platform yang didukung:
-- Instagram (instagram.com)
-- TikTok (tiktok.com)
-- Facebook (facebook.com, fb.watch)
-- Twitter/X (twitter.com, x.com)
-- YouTube (youtube.com, youtu.be)
-
-Selalu jawab dengan sopan dan helpful. Jika tidak tahu sesuatu, akui dan bilang kamu tidak tahu.`;
+Aturan:
+- Jangan bantu coding/programming
+- Jangan mengarang fakta — kalo nggak tau, akui aja
+- Jawab dengan sopan dan natural kayak chat WA`;
 
 const AICommand: CommandModule = {
   config: {
@@ -83,15 +83,30 @@ const AICommand: CommandModule = {
       const provider = aiService.getProvider();
       let models: string[] = [];
       let info = '';
+
       if (provider === 'ollama') {
         models = await AIService.listOllamaModels();
         if (models.length === 0) {
           info = '\n\n⚠️ Tidak bisa terhubung ke Ollama. Pastikan Ollama berjalan dan `OLLAMA_BASE_URL` benar.';
         }
+        info += '\n\nGunakan `!ai model <nama model>` untuk mengganti (hanya owner).';
+      } else if (provider === 'openai' || provider === 'other') {
+        // OpenAI-compatible custom API — coba fetch dari endpoint /models
+        models = await AIService.getAvailableModels(provider);
+        if (models.length === 0) {
+          info = '\n\n⚠️ Tidak bisa mengambil daftar model dari API. Set model manual dengan `!ai model <nama model>`.';
+        } else {
+          info = '\n\nGunakan `!ai model <nama model>` untuk mengganti (hanya owner).';
+        }
       } else {
-        models = AIService.getAvailableOpenRouterModels();
+        // openrouter
+        models = await AIService.getAvailableModels('openrouter');
+        if (models.length === 0) {
+          models = AIService.getAvailableOpenRouterModels();
+        }
         info = '\n\nGunakan `!ai model <nama model>` untuk mengganti (hanya owner).';
       }
+
       const modelList = models.map((m: string) => `• ${m}`).join('\n');
       await context.socket.sendMessage(context.fromJid, {
         text: `🤖 *Model ${provider.toUpperCase()} yang Tersedia:*\n\n${modelList}\n\nModel saat ini: ${aiService.getModel()}${info}`,
