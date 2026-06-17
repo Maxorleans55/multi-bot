@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-type Provider = 'openai' | 'openrouter' | 'ollama' | 'other';
+type Provider = 'openrouter' | 'ollama';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -13,8 +13,6 @@ interface StreamChunk {
 }
 
 type StreamCallback = (chunk: StreamChunk) => void;
-
-const OPENAI_COMPATIBLE_ENDPOINT = '/chat/completions';
 
 export class AIService {
   private provider: Provider;
@@ -32,38 +30,17 @@ export class AIService {
       this.baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
       this.model = process.env.OLLAMA_MODEL || 'llama3.2';
       this.apiKey = '';
-    } else if (this.provider === 'openai') {
-      this.apiKey = process.env.OPENAI_API_KEY || '';
-      this.baseUrl = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
-      this.model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-    } else if (this.provider === 'other') {
-      this.apiKey = process.env.OTHER_API_KEY || '';
-      this.baseUrl = (process.env.OTHER_BASE_URL || '').replace(/\/+$/, '');
-      this.model = process.env.OTHER_MODEL || '';
     } else {
-      // openrouter (default / backward compatible)
       this.provider = 'openrouter';
-      this.apiKey = process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY || '';
-      this.baseUrl = (process.env.OPENROUTER_BASE_URL || process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
-      this.model = process.env.OPENROUTER_MODEL || process.env.AI_MODEL || 'anthropic/claude-3-haiku';
+      this.apiKey = process.env.OPENROUTER_API_KEY || '';
+      this.baseUrl = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+      this.model = process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku';
     }
 
     if (!this.isConfigured()) {
-      let msg: string;
-      switch (this.provider) {
-        case 'ollama':
-          msg = '⚠️ OLLAMA_BASE_URL is not set. AI features will be disabled.';
-          break;
-        case 'openai':
-          msg = '⚠️ OPENAI_API_KEY / AI_API_KEY is not set. AI features will be disabled.';
-          break;
-        case 'other':
-          msg = '⚠️ OTHER_BASE_URL and OTHER_API_KEY are not set. AI features will be disabled.';
-          break;
-        default:
-          msg = '⚠️ OPENROUTER_API_KEY / AI_API_KEY is not set. AI features will be disabled.';
-          break;
-      }
+      const msg = this.provider === 'ollama'
+        ? '⚠️ OLLAMA_BASE_URL is not set. AI features will be disabled.'
+        : '⚠️ OPENROUTER_API_KEY is not set. AI features will be disabled.';
       console.warn(msg);
     } else {
       console.log(`✅ [AIService] Provider: ${this.provider} | Model: ${this.model} | URL: ${this.baseUrl}`);
@@ -77,9 +54,6 @@ export class AIService {
   isConfigured(): boolean {
     if (this.provider === 'ollama') {
       return !!this.baseUrl;
-    }
-    if (this.provider === 'other') {
-      return !!this.baseUrl && !!this.apiKey;
     }
     return !!this.apiKey;
   }
@@ -104,7 +78,7 @@ export class AIService {
     if (this.provider === 'ollama') {
       return this.callOllamaNonStream(sessionId, messages);
     }
-    return this.callOpenAICompatibleNonStream(sessionId, messages);
+    return this.callOpenRouterNonStream(sessionId, messages);
   }
 
   async chatStream(
@@ -128,15 +102,13 @@ export class AIService {
     if (this.provider === 'ollama') {
       return this.callOllamaStream(sessionId, messages, onChunk);
     }
-    return this.callOpenAICompatibleStream(sessionId, messages, onChunk);
+    return this.callOpenRouterStream(sessionId, messages, onChunk);
   }
 
-  // ─────────── OpenAI-compatible (openai | openrouter) ───────────
-
-  private async callOpenAICompatibleNonStream(sessionId: string, messages: ChatMessage[]): Promise<string> {
+  private async callOpenRouterNonStream(sessionId: string, messages: ChatMessage[]): Promise<string> {
     try {
       const response = await axios.post<any>(
-        `${this.baseUrl}${OPENAI_COMPATIBLE_ENDPOINT}`,
+        `${this.baseUrl}/chat/completions`,
         {
           model: this.model,
           messages: messages,
@@ -158,7 +130,7 @@ export class AIService {
 
       return assistantMessage;
     } catch (error: any) {
-      console.error(`[AIService] ${this.provider} API Error:`, error.response?.data || error.message);
+      console.error('OpenRouter API Error:', error.response?.data || error.message);
       throw new Error(
         error.response?.data?.error?.message ||
         error.response?.data?.error ||
@@ -167,29 +139,23 @@ export class AIService {
     }
   }
 
-  private async callOpenAICompatibleStream(
+  private async callOpenRouterStream(
     sessionId: string,
     messages: ChatMessage[],
     onChunk?: StreamCallback
   ): Promise<string> {
     try {
-      const body: Record<string, any> = {
-        model: this.model,
-        messages: messages,
-        stream: true,
-      };
-
-      // OpenRouter-specific tools (only sent when provider is 'openrouter')
-      if (this.provider === 'openrouter') {
-        body.tools = [
-          { type: 'openrouter:datetime' },
-          { type: 'openrouter:web_search' },
-        ];
-      }
-
       const response = await axios.post(
-        `${this.baseUrl}${OPENAI_COMPATIBLE_ENDPOINT}`,
-        body,
+        `${this.baseUrl}/chat/completions`,
+        {
+          model: this.model,
+          messages: messages,
+          stream: true,
+          tools: [
+            { type: 'openrouter:datetime' },
+            { type: 'openrouter:web_search' }
+          ]
+        },
         {
           headers: {
             'Authorization': `Bearer ${this.apiKey}`,
@@ -201,9 +167,9 @@ export class AIService {
       );
 
       const stream = response.data;
-      return this.handleOpenAICompatibleSSEStream(sessionId, messages, stream, onChunk);
+      return this.handleOpenRouterSSEStream(sessionId, messages, stream, onChunk);
     } catch (error: any) {
-      console.error(`[AIService] ${this.provider} API Error:`, error.response?.data || error.message);
+      console.error('OpenRouter API Error:', error.response?.data || error.message);
       throw new Error(
         error.response?.data?.error?.message ||
         error.response?.data?.error?.message ||
@@ -213,7 +179,7 @@ export class AIService {
     }
   }
 
-  private handleOpenAICompatibleSSEStream(
+  private handleOpenRouterSSEStream(
     sessionId: string,
     messages: ChatMessage[],
     stream: any,
@@ -440,16 +406,10 @@ export class AIService {
   }
 
   private getNotConfiguredMessage(): string {
-    switch (this.provider) {
-      case 'ollama':
-        return 'AI service is not configured. Please set OLLAMA_BASE_URL in .env';
-      case 'openai':
-        return 'AI service is not configured. Please set OPENAI_API_KEY (or AI_API_KEY) and OPENAI_BASE_URL (or AI_BASE_URL) in .env';
-      case 'other':
-        return 'AI service is not configured. Please set OTHER_BASE_URL and OTHER_API_KEY in .env';
-      default:
-        return 'AI service is not configured. Please set OPENROUTER_API_KEY (or AI_API_KEY) and OPENROUTER_BASE_URL (or AI_BASE_URL) in .env';
+    if (this.provider === 'ollama') {
+      return 'AI service is not configured. Please set OLLAMA_BASE_URL in .env';
     }
+    return 'AI service is not configured. Please set OPENROUTER_API_KEY in .env';
   }
 
   getConversationHistory(sessionId: string): ChatMessage[] {
@@ -490,73 +450,17 @@ export class AIService {
     return this.model;
   }
 
-  /**
-   * Ambil daftar model untuk provider OpenAI-compatible (openai | openrouter | other).
-   * Untuk OpenRouter: coba fetch dari API OpenRouter, fallback ke hardcoded list.
-   * Untuk OpenAI / Other custom: coba fetch dari endpoint /models.
-   */
-  static async getAvailableModels(provider: Provider, baseUrl?: string, apiKey?: string): Promise<string[]> {
-    if (provider === 'openrouter') {
-      // Coba fetch dari OpenRouter API
-      const url = (baseUrl || process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
-      const key = apiKey || process.env.OPENROUTER_API_KEY || '';
-      if (key) {
-        try {
-          const response = await axios.get<any>(`${url}/models`, {
-            headers: { 'Authorization': `Bearer ${key}` },
-            timeout: 10000,
-          });
-          const models = response.data?.data || [];
-          if (models.length > 0) return models.map((m: any) => m.id).filter(Boolean);
-        } catch { /* fallback to hardcoded */ }
-      }
-      // Fallback: hardcoded popular free models
-      return [
-        'qwen/qwen3-next-80b-a3b-instruct:free',
-        'openrouter/owl-alpha',
-        'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
-        'openai/gpt-oss-120b:free',
-        'openrouter/free',
-      ];
-    }
-
-    if (provider === 'openai' || provider === 'other') {
-      // Coba fetch dari endpoint /models dari API yg compatible
-      const defaultUrl = provider === 'openai'
-        ? (baseUrl || process.env.OPENAI_BASE_URL || process.env.AI_BASE_URL || 'https://api.openai.com/v1')
-        : (baseUrl || process.env.OTHER_BASE_URL || process.env.AI_BASE_URL || '');
-      const defaultKey = provider === 'openai'
-        ? (apiKey || process.env.OPENAI_API_KEY || process.env.AI_API_KEY || '')
-        : (apiKey || process.env.OTHER_API_KEY || process.env.AI_API_KEY || '');
-      const url = defaultUrl.replace(/\/+$/, '');
-      const key = defaultKey;
-      if (key && url) {
-        try {
-          const response = await axios.get<any>(`${url}/models`, {
-            headers: { 'Authorization': `Bearer ${key}` },
-            timeout: 10000,
-          });
-          const models = response.data?.data || [];
-          if (models.length > 0) return models.map((m: any) => m.id).filter(Boolean);
-        } catch { /* return empty */ }
-      }
-      return [];
-    }
-
-    return [];
-  }
-
-  /**
-   * Fetch available models from OpenRouter API.
-   * @deprecated Use `getAvailableModels('openrouter')` instead.
-   */
   static getAvailableOpenRouterModels(): string[] {
     return [
       'qwen/qwen3-next-80b-a3b-instruct:free',
       'openrouter/owl-alpha',
+      'baidu/cobuddy:free',
       'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+      'poolside/laguna-m.1:free',
+      'arcee-ai/trinity-large-thinking:free',
+      'nvidia/nemotron-3-super-120b-a12b:free',
       'openai/gpt-oss-120b:free',
-      'openrouter/free',
+      'openrouter/free'
     ];
   }
 
