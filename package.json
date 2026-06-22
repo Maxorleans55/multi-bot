@@ -14,6 +14,7 @@
     "start:dev": "node dist/index.js -- --session=dev --only",
     "test:toolCallFilter": "tsx --test tests/toolCallFilter.test.ts",
     "test:aiServiceStream": "tsx --test tests/aiServiceStream.test.ts",
+    "test:aiToolChaining": "tsx --test tests/aiToolChaining.test.ts",
     "type-check": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma db push",

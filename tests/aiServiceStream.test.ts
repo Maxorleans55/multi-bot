@@ -63,3 +63,26 @@ test('Ollama stream preserves token whitespace and fragmented JSON lines', async
   assert.equal(await resultPromise, 'Penyebabnya ada dua.');
   assert.equal(snapshots.at(-1), 'Penyebabnya ada dua.');
 });
+
+test('stream replaces a truncated tool-call marker with a safe fallback', async () => {
+  const service = new AIService();
+  const stream = new PassThrough();
+  const snapshots: string[] = [];
+  const wire = openAiEvent('<tool_calls') + 'data: [DONE]\n';
+
+  const resultPromise = (service as any).handleOpenAICompatibleSSEStream(
+    'stream-malformed-tool-call-test',
+    [],
+    stream,
+    ((chunk) => {
+      if (!chunk.done) snapshots.push(chunk.content);
+    }) satisfies StreamCallback
+  );
+
+  stream.end(wire);
+
+  const fallback = 'Maaf, pencarian gagal diproses. Silakan coba lagi sebentar.';
+  assert.equal(await resultPromise, fallback);
+  assert.equal(snapshots.at(-1), fallback);
+  assert.equal(snapshots.some((content) => content.includes('<tool_calls')), false);
+});

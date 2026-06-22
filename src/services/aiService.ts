@@ -2,6 +2,7 @@ import axios from 'axios';
 import toolRegistry from '../tools/toolRegistry.js';
 import type { AIToolCall as AIToolCallType, ToolContext } from '../types/tools.js';
 import {
+  containsToolCallArtifact,
   parseDsmlToolCalls,
   stripToolCallArtifacts,
 } from '../utils/toolCallFilter.js';
@@ -23,6 +24,8 @@ interface StreamChunk {
 type StreamCallback = (chunk: StreamChunk) => void;
 
 const OPENAI_COMPATIBLE_ENDPOINT = '/chat/completions';
+const MALFORMED_TOOL_CALL_FALLBACK = 'Maaf, pencarian gagal diproses. Silakan coba lagi sebentar.';
+const MAX_TOOL_ROUNDS = 4;
 
 export class AIService {
   private provider: Provider;
@@ -201,44 +204,65 @@ export class AIService {
     // Get registered tool definitions
     const tools = toolRegistry.hasTools() ? toolRegistry.getApiDefinitions() : undefined;
 
-    // ── Step 1: Make initial request with tools ──
-    const firstResponse = await this.callOpenAIWithTools(messages, tools);
+    const requestModel = async () => {
+      let response = await this.callOpenAIWithTools(messages, tools);
 
-    // ── Step 2: Check if AI wants to use tools ──
-    if (firstResponse.tool_calls && firstResponse.tool_calls.length > 0) {
-      console.log(`[AIService] 🔧 AI requested ${firstResponse.tool_calls.length} tool call(s)`);
+      // A provider can occasionally stop halfway through a textual tool call.
+      // Retry the same round once before returning a user-safe fallback.
+      if (response.malformed_tool_call) {
+        console.warn('[AIService] Malformed textual tool call detected. Retrying once.');
+        response = await this.callOpenAIWithTools(messages, tools);
 
-      // Add assistant message with tool_calls to history
+        if (response.malformed_tool_call) {
+          return { content: MALFORMED_TOOL_CALL_FALLBACK };
+        }
+      }
+
+      return response;
+    };
+
+    let modelResponse = await requestModel();
+    let toolRound = 0;
+
+    // Support sequential tool use such as web_search -> web_fetch. Each model
+    // response may request one or more calls, then inspect their results before
+    // deciding whether another tool round is needed.
+    while (modelResponse.tool_calls?.length && toolRound < MAX_TOOL_ROUNDS) {
+      toolRound += 1;
+      console.log(
+        `[AIService] 🔧 Tool round ${toolRound}: ${modelResponse.tool_calls.length} call(s)`
+      );
+
       messages.push({
         role: 'assistant',
         content: null,
-        tool_calls: firstResponse.tool_calls,
+        tool_calls: modelResponse.tool_calls,
       });
 
-      // Show "processing" status to user
       if (toolContext?.socket && toolContext?.fromJid) {
         await toolContext.socket.sendPresenceUpdate('composing', toolContext.fromJid);
       }
 
-      // Execute tool calls
-      const toolResults = await toolRegistry.executeToolCalls(firstResponse.tool_calls, toolContext || {});
+      const toolResults = await toolRegistry.executeToolCalls(
+        modelResponse.tool_calls,
+        toolContext || {}
+      );
+      messages.push(...toolResults);
 
-      // Add tool results to messages
-      for (const result of toolResults) {
-        messages.push(result);
-      }
-
-      // Save intermediate state (without final response yet)
       this.conversationHistory.set(sessionId, messages);
       this.setExpiry(sessionId);
 
-      // ── Step 3: Get final response with tool results ──
-      // Use streaming for the final answer so user sees typing effect
-      return this.callOpenAICompatibleStream(sessionId, messages, onChunk);
+      modelResponse = await requestModel();
     }
 
-    // ── No tool calls: return content directly ──
-    let content = firstResponse.content || '';
+    if (modelResponse.tool_calls?.length) {
+      console.warn(`[AIService] Tool round limit (${MAX_TOOL_ROUNDS}) reached.`);
+      modelResponse = {
+        content: 'Maaf, permintaan ini membutuhkan terlalu banyak langkah. Coba sederhanakan pertanyaannya.',
+      };
+    }
+
+    let content = modelResponse.content || '';
 
     // Safety filter (already filtered in callOpenAIWithTools, but double-check)
     content = this.filterToolCallArtifacts(content);
@@ -265,7 +289,11 @@ export class AIService {
   private async callOpenAIWithTools(
     messages: ChatMessage[],
     tools?: any[]
-  ): Promise<{ content: string | null; tool_calls?: AIToolCallType[] }> {
+  ): Promise<{
+    content: string | null;
+    tool_calls?: AIToolCallType[];
+    malformed_tool_call?: boolean;
+  }> {
     try {
       const body: Record<string, any> = {
         model: this.model,
@@ -332,8 +360,14 @@ export class AIService {
 
       // Filter out any tool call artifacts that the model might have
       // written as visible text instead of using proper tool_calls API
-      const filteredContent = this.filterToolCallArtifacts(message.content || '');
-      return { content: filteredContent };
+      const rawContent = message.content || '';
+      const filteredContent = this.filterToolCallArtifacts(rawContent);
+      return {
+        content: filteredContent,
+        malformed_tool_call: !!rawContent
+          && !filteredContent
+          && containsToolCallArtifact(rawContent),
+      };
     } catch (error: any) {
       console.error(`[AIService] ${this.provider} API Error (tools):`, error.response?.data || error.message);
       throw new Error(
@@ -441,7 +475,11 @@ export class AIService {
         clearTimeout(timeoutId);
 
         // Final safety filter on the fully accumulated content
-        const finalContent = this.filterToolCallArtifacts(content || '');
+        let finalContent = this.filterToolCallArtifacts(content || '');
+        if (!finalContent && content && containsToolCallArtifact(content)) {
+          finalContent = MALFORMED_TOOL_CALL_FALLBACK;
+          if (onChunk) onChunk({ content: finalContent, done: false });
+        }
 
         if (finalContent || !isError) {
           if (finalContent) {
@@ -597,7 +635,11 @@ export class AIService {
         clearTimeout(timeoutId);
 
         // Final safety filter on the fully accumulated content
-        const finalContent = this.filterToolCallArtifacts(content || '');
+        let finalContent = this.filterToolCallArtifacts(content || '');
+        if (!finalContent && content && containsToolCallArtifact(content)) {
+          finalContent = MALFORMED_TOOL_CALL_FALLBACK;
+          if (onChunk) onChunk({ content: finalContent, done: false });
+        }
 
         if (finalContent || !isError) {
           if (finalContent) {

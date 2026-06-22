@@ -17,6 +17,8 @@
 const TOOL_CALL_STRIP_RE = /<tool_calls\b[^>]*>[\s\S]*?(?:<\/tool_calls\s*>|$)|\{"name":"\w+","arguments":\{[^}]*\}\}|<invoke\s+name\s*=\s*"(?:web_search|web_fetch|download_social_media|download_youtube|pinterest_search)"[\s\S]*?<\/invoke\s*>|```(?:json)?\s*\{\s*"name":\s*"\w+",\s*"arguments":[\s\S]*?```/gi;
 
 const DSML_MARKER_RE = /<\s*\/?\s*(?:\||｜){2}\s*DSML\s*(?:\||｜){2}/i;
+const STANDARD_TOOL_MARKER_RE = /<\s*\/?\s*(?:tool_calls|invoke|parameter)\b/i;
+const INCOMPLETE_TOOL_MARKER_RE = /<\s*\/?\s*(?:tool_calls|invoke|parameter)\b[^>]*$/gi;
 const MAX_DSML_LENGTH = 64 * 1024;
 const MAX_DSML_TOOL_CALLS = 8;
 
@@ -53,6 +55,13 @@ function decodeXmlEntities(value: string): string {
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&amp;/gi, '&');
+}
+
+/** Detect both complete and truncated textual tool-call markup. */
+export function containsToolCallArtifact(text: string): boolean {
+  if (!text) return false;
+  const normalized = normalizeDsmlMarkup(text);
+  return DSML_MARKER_RE.test(text) || STANDARD_TOOL_MARKER_RE.test(normalized);
 }
 
 /**
@@ -133,6 +142,8 @@ export function stripToolCallArtifacts(text: string): string {
   if (!text) return text;
   return normalizeDsmlMarkup(text)
     .replace(TOOL_CALL_STRIP_RE, '')
+    // Catch truncated standard tags such as the literal "<tool_calls".
+    .replace(INCOMPLETE_TOOL_MARKER_RE, '')
     // Remove an incomplete DSML tag too; fail closed rather than exposing it.
     .replace(/<\/?\s*(?:\||｜){2}\s*DSML\s*(?:\||｜){2}[\s\S]*$/gi, '')
     .replace(/\n{3,}/g, '\n\n')

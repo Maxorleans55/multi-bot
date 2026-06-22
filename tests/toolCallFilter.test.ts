@@ -41,3 +41,9 @@ test('fails closed for incomplete DSML markup', () => {
   assert.deepEqual(parseDsmlToolCalls(incomplete, new Set(['web_fetch'])), []);
   assert.equal(stripToolCallArtifacts(incomplete), '');
 });
+
+test('fails closed for a truncated standard tool_calls tag', () => {
+  assert.equal(stripToolCallArtifacts('<tool_calls'), '');
+  assert.equal(stripToolCallArtifacts('Memproses\n<tool_calls'), 'Memproses');
+  assert.equal(stripToolCallArtifacts('</tool_calls'), '');
+});

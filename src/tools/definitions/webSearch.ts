@@ -35,7 +35,7 @@ export const definition: AIToolDefinition = {
         query: {
           type: 'string',
           description:
-            'The search query string (e.g. "harga emas hari ini 2026" or "cara membuat nasi goreng"). Use keywords in Indonesian or English.',
+            'A concise search query in Indonesian or English (e.g. "harga emas hari ini" or "penyebab pemadaman listrik Jawa"). Do not add a year unless the user explicitly asks about that year.',
         },
         maxResults: {
           type: 'number',
