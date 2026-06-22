@@ -257,5 +257,215 @@ docker run -e DATABASE_URL=mongodb://host.docker.internal:27017/bot_baileys bot-
 
 ---
 
+## 🧰 MCP Context-Mode
+
+[`context-mode`](https://github.com/teknologi-umum/context-mode) adalah MCP server yang menyediakan **sandboxed code execution**, **persistent knowledge base**, dan **context optimization** untuk AI Agent.
+
+### Installation Status
+
+| Check | Status |
+|-------|--------|
+| Runtime | ✅ **Fast (Bun)** — JS/TS 3-5x lebih cepat |
+| Storage Sessions | `~/.gemini/context-mode/sessions` |
+| Version | `v1.0.162` |
+| Hooks | ✅ BeforeTool, SessionStart, AfterTool, Precompress terpasang |
+
+### Available Tools
+
+| Tool | Fungsi |
+|------|--------|
+| [`ctx_execute`](#1-ctx_execute---sandboxed-code-execution) | Run code di sandbox (JS/TS/Python/Go/Shell) — hanya `console.log` yang masuk konteks |
+| [`ctx_execute_file`](#2-ctx_execute_file---analisis-file-tanpa-baca-full) | Baca & proses file di sandbox tanpa memasukkan raw bytes ke konteks |
+| [`ctx_index`](#3-ctx_index---persistent-knowledge-base) | Simpan dokumentasi/knowledge ke searchable FTS5 database |
+| [`ctx_search`](#4-ctx_search---query-knowledge-base) | Cari indexed content dengan multi-strategy ranking (stemming + trigram) |
+| [`ctx_fetch_and_index`](#5-ctx_fetch_and_index---fetch--index-url) | Fetch URL, convert ke markdown, auto-index ke knowledge base |
+| [`ctx_batch_execute`](#6-ctx_batch_execute---batch-commands--auto-index) | Multiple commands dalam satu call, output auto-indexed |
+| [`ctx_stats`](#7-ctx_stats---context-consumption-stats) | Lihat konsumsi konteks session saat ini |
+| [`ctx_doctor`](#8-ctx_doctor---diagnostics) | Diagnostik instalasi context-mode |
+| [`ctx_purge`](#9-ctx_purge---destructive-cleanup) | Hapus indexed content (destructive — gunakan hati-hati) |
+| [`ctx_insight`](#10-ctx_insight---analytics-dashboard) | Dashboard analytics session di browser (port 4747) |
+
+---
+
+### 1. `ctx_execute` — Sandboxed Code Execution
+
+**Think-in-Code**: bytes yang diproses tidak pernah masuk conversation memory, hanya `console.log` yang masuk.
+
+**Gunakan ketika:**
+- Ingin derive answer dari data (filter, count, aggregate, parse, compare, transform)
+- Output shape/size tidak bisa diprediksi sebelum eksekusi
+- Ingin menghindari membaca raw log/file besar langsung ke konteks
+
+```typescript
+// Contoh: Analyze 47 source files tanpa membaca satupun
+ctx_execute(language: "javascript", code: `
+  const fs = require('fs');
+  const files = fs.readdirSync('src').filter(f => f.endsWith('.ts'));
+  files.forEach(f => {
+    const lines = fs.readFileSync('src/'+f,'utf8').split('\\n').length;
+    console.log(f + ': ' + lines + ' lines');
+  });
+`)
+// Output: 47 files analyzed, 15,314 LoC — hanya ~3.6 KB masuk konteks
+```
+
+**Parameter penting:**
+- `language`: `javascript`, `typescript`, `python`, `shell`, `go`, `ruby`, `rust`, `php`, `perl`, `r`, `elixir`, `csharp`
+- `background: true` — untuk long-running process (dev server, watcher)
+- `intent` — untuk output >5KB auto-index ke knowledge base, bisa di-search via `ctx_search`
+
+---
+
+### 2. `ctx_execute_file` — Analisis File Tanpa Baca Full
+
+Baca file ke sandbox (`FILE_CONTENT` variable), proses dengan code, hanya hasil `console.log` yang masuk konteks.
+
+```typescript
+// Contoh: Cari error lines di log besar
+ctx_execute_file(path: "huge.log", language: "javascript", code: `
+  const errs = FILE_CONTENT.split('\\n').filter(l => /ERROR|FATAL/.test(l));
+  console.log(errs.length + ' error lines');
+  console.log(errs.slice(-5).join('\\n'));
+`)
+```
+
+---
+
+### 3. `ctx_index` — Persistent Knowledge Base
+
+Simpan markdown/docs ke searchable FTS5 database. Menggunakan BM25 + trigram matching.
+
+```typescript
+// Index dari string langsung
+ctx_index(content: "# React useEffect\n\nThe Effect Hook lets you ...", source: "react-useeffect-docs")
+
+// Index dari file/directory
+ctx_index(path: "/path/to/docs", source: "project-docs", include: ["*.md", "*.ts"])
+```
+
+**Source label** digunakan sebagai filter di `ctx_search`.
+
+---
+
+### 4. `ctx_search` — Query Knowledge Base
+
+Multi-strategy ranking pipeline: Porter stemming + trigram-substring + proximity-rerank.
+
+```typescript
+// Batch query — multiple questions dalam satu call
+ctx_search(queries: ["root cause", "proposed fix", "test coverage"], source: "issue-#683")
+
+// Timeline mode — cari historical context
+ctx_search(queries: ["what did we decide about caching"], source: "decision", sort: "timeline")
+
+// Filter content type
+ctx_search(queries: ["useEffect cleanup pattern"], contentType: "code")
+```
+
+**Content type filter:**
+- `contentType: "code"` — surface implementation snippets
+- `contentType: "prose"` — surface explanations
+
+---
+
+### 5. `ctx_fetch_and_index` — Fetch & Index URL
+
+Fetch URL, convert HTML ke markdown, simpan di knowledge base. Raw bytes tidak masuk konteks.
+
+```typescript
+// Single URL
+ctx_fetch_and_index(url: "https://react.dev/...", source: "react-docs")
+
+// Batch parallel fetch (concurrency 2-8)
+ctx_fetch_and_index(
+  requests: [
+    {url: "https://react.dev/...", source: "react"},
+    {url: "https://vuejs.org/...", source: "vue"}
+  ],
+  concurrency: 5
+)
+```
+
+**Caching**: 24 jam default, override via `ttl` parameter.
+
+---
+
+### 6. `ctx_batch_execute` — Batch Commands + Auto-Index
+
+Multiple commands dalam satu call, output auto-indexed. Bisa langsung query hasilnya.
+
+```typescript
+ctx_batch_execute(
+  commands: [
+    {label: "Source Tree", command: "ls -la src/"},
+    {label: "Package.json", command: "cat package.json"},
+    {label: "Git Log", command: "git log --oneline -10"}
+  ],
+  queries: ["dependencies", "recent changes"],
+  concurrency: 2   // Parallel I/O-bound commands
+)
+```
+
+**Query scope:**
+- `query_scope: "batch"` (default) — search only within this batch's output
+- `query_scope: "global"` — search entire persistent knowledge base
+
+---
+
+### 7. `ctx_stats` — Context Consumption Stats
+
+Lihat berapa banyak bytes yang sudah digunakan session ini, breakdown per tool, estimated token usage.
+
+```typescript
+ctx_stats()
+```
+
+---
+
+### 8. `ctx_doctor` — Diagnostics
+
+Cek instalasi context-mode lengkap. Gunakan jika ada masalah.
+
+```typescript
+ctx_doctor()
+```
+
+---
+
+### 9. `ctx_purge` — Destructive Cleanup
+
+Hapus indexed content. **Tidak bisa di-undo.**
+
+```typescript
+// Hapus session tertentu
+ctx_purge(confirm: true, sessionId: "<uuid>")
+
+// Hapus semua data project
+ctx_purge(confirm: true, scope: "project")
+```
+
+---
+
+### 10. `ctx_insight` — Analytics Dashboard
+
+Buka dashboard analytics di browser untuk lihat session activity, tool usage, error rate, dll.
+
+```typescript
+ctx_insight()           // port 4747 default
+ctx_insight(port: 5000) // custom port
+```
+
+---
+
+### Best Practices
+
+1. **Think-in-Code**: Daripada membaca file besar langsung, proses dulu di sandbox dan print summary-nya.
+2. **Batch queries**: Kumpulkan multiple questions dalam satu `ctx_search` call.
+3. **Index dokumentasi**: Simpan dokumentasi framework/library yang sering dipakai via `ctx_index`.
+4. **Gunakan `intent`**: Untuk output besar, kasih `intent` supaya auto-indexed dan bisa di-search.
+5. **Parallel fetch**: Untuk research multi-source, gunakan `ctx_fetch_and_index` dengan `concurrency: 4-8`.
+
+---
+
 > **File ini diperuntukkan sebagai panduan konteks untuk AI Agent dan Developer.**
 > Update sesuai dengan perubahan arsitektur dan konvensi project.

@@ -1,29 +1,13 @@
 import type { WASocket } from '@innovatorssoft/baileys';
 import type { CommandModule } from '../../types/index.js';
+import type { ToolContext } from '../../types/tools.js';
 import aiService, { AIService } from '../../services/aiService.js';
-import { detectSocialMediaLink, downloadFromSocialMedia, type SocialMediaLink } from '../../bot/autoDownload.js';
 import { isOwner } from '../../config/botConfig.js';
+import { getSystemPrompt } from '../../services/systemPrompt.js';
 
 const ACTIVE_SESSIONS = new Map<string, { enabled: boolean; mode: 'single' | 'chat' }>();
 
-const DEFAULT_SYSTEM_PROMPT = `Kamu adalah asisten AI yang helpful, friendly, dan bisa membantu berbagai tugas.
-
-⚠️ ANTI-RAMBLING:
-- Jawab LANGSUNG ke inti, jangan ngelantur
-- Jaga jawaban tetap singkat (2-4 kalimat) kecuali diminta detail
-- JANGAN nambahin info yg nggak diminta user
-
-Kemampuan:
-- Menjawab pertanyaan singkat & jelas
-- Menulis teks/cerita/cerpen
-- Menerjemahkan bahasa
-- Memberi saran dan rekomendasi (secukupnya)
-- Download media dari link sosial media (Instagram, TikTok, Facebook, Twitter/X, YouTube) — langsung proses tanpa konfirmasi
-
-Aturan:
-- Jangan bantu coding/programming
-- Jangan mengarang fakta — kalo nggak tau, akui aja
-- Jawab dengan sopan dan natural kayak chat WA`;
+const DEFAULT_SYSTEM_PROMPT = getSystemPrompt();
 
 const AICommand: CommandModule = {
   config: {
@@ -123,16 +107,6 @@ const AICommand: CommandModule = {
 
     const question = args.join(' ');
 
-    const socialLink = detectSocialMediaLink(question);
-    if (socialLink) {
-      await context.socket.sendPresenceUpdate('composing', context.fromJid);
-      await context.socket.sendMessage(context.fromJid, {
-        text: `🔗 Link ${socialLink.platform} terdeteksi! Sedang mendownload...`,
-      });
-      await downloadFromSocialMedia(socialLink, context.socket, context.fromJid);
-      return;
-    }
-
     if (!question) {
       await context.socket.sendMessage(context.fromJid, {
         text: `📖 *Cara Penggunaan AI:*
@@ -151,18 +125,33 @@ const AICommand: CommandModule = {
     await context.socket.sendPresenceUpdate('composing', context.fromJid);
 
     try {
+      const toolContext: ToolContext = {
+        socket: context.socket,
+        fromJid: context.fromJid,
+        sessionId: userId,
+        pushName: context.simplified?.pushName ?? undefined,
+      };
+
       let responseBuffer = '';
-      await aiService.chatStream(userId, question, DEFAULT_SYSTEM_PROMPT, async (chunk: { content: string; done: boolean }) => {
-        if (!chunk.done && chunk.content) {
-          responseBuffer = chunk.content;
-        }
-      });
+      await aiService.chatWithTools(
+        userId,
+        question,
+        DEFAULT_SYSTEM_PROMPT,
+        (chunk) => {
+          if (!chunk.done && chunk.content) {
+            responseBuffer = chunk.content;
+          }
+        },
+        toolContext
+      );
 
       await context.socket.sendPresenceUpdate('paused', context.fromJid);
 
-      await context.socket.sendMessage(context.fromJid, {
-        text: `✨ *AI Response:*\n\n${responseBuffer}`,
-      });
+      if (responseBuffer) {
+        await context.socket.sendMessage(context.fromJid, {
+          text: responseBuffer,
+        });
+      }
     } catch (error: any) {
       await context.socket.sendPresenceUpdate('paused', context.fromJid);
       await context.socket.sendMessage(context.fromJid, {

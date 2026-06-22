@@ -1,7 +1,7 @@
 # Bot-Baileys-AI — TODO.md
 
 > Task list dan development roadmap.
-> **Versi:** 1.0.0 | **Last Updated:** 17 Juni 2026
+> **Versi:** 1.0.0 | **Last Updated:** 22 Juni 2026
 
 ---
 
@@ -26,7 +26,11 @@
 - [ ] **AI Voice Notes** — Transcribe dan proses voice notes dengan AI
 - [ ] **Custom System Prompt per User** — User bisa set system prompt sendiri
 - [ ] **AI Personality Presets** — Multiple personality templates
-- [ ] **Web Search Integration** — Integrasi web search untuk AI (selain OpenRouter tools)
+- [x] **Web Search Integration** — Firecrawl search + fetch via function calling
+- [x] **Web Fetch Tool** — Firecrawl headless scraper (ganti axios+cheerio)
+- [x] **System Prompt Refactor** — Extract ke file terpisah, dynamic date injection
+- [x] **AI Date/Time Awareness** — Inject real-time date ke prompt, anti-year-bias
+- [x] **Group Prompt Enhancement** — Tool instructions lengkap di group auto-reply
 - [ ] **Conversation Export** — Export riwayat chat AI
 
 ### Media Download
@@ -97,7 +101,17 @@
 - [ ] **Context-Aware Conversations** — Remember user context across sessions
 - [ ] **AI Training/Finetuning** — Custom model fine-tuning
 
-## 🐛 Known Issues
+## 🔄 Recent Changes (22 Juni 2026)
+
+| Perubahan | Files | Status |
+|-----------|-------|--------|
+| **Firecrawl Web Fetch** — Ganti axios+cheerio scraper dengan Firecrawl headless browser API | [`src/tools/definitions/webFetch.ts`](src/tools/definitions/webFetch.ts) | ✅ Done |
+| **Firecrawl Web Search** — Ganti SearXNG dengan Firecrawl search endpoint | [`src/tools/definitions/webSearch.ts`](src/tools/definitions/webSearch.ts) | ✅ Done |
+| **System Prompt Refactor** — Extract ke `systemPrompt.ts`, dynamic date injection, anti-year-bias | [`src/services/systemPrompt.ts`](src/services/systemPrompt.ts), [`src/services/aiModeHandler.ts`](src/services/aiModeHandler.ts), [`src/bot/botHandler.ts`](src/bot/botHandler.ts) | ✅ Done |
+| **Group Prompt Enhancement** — Tool instructions lengkap, web search rules, downloader capability | [`src/services/systemPrompt.ts`](src/services/systemPrompt.ts) | ✅ Done |
+| **Env Cleanup** — Hapus `SEARXNG_URL`, tambah `FIRECRAWL_URL` | [`.env`](.env), [`.env.example`](.env.example) | ✅ Done |
+
+##  Known Issues
 
 | Issue | Status | Priority | Notes |
 |-------|--------|----------|-------|
@@ -107,6 +121,7 @@
 | Tidak ada rate limiting | 🟡 Open | High | Bisa menyebabkan spam |
 | Plugin hot reload belum support | 🟡 Open | Low | Butuh restart untuk reload plugin |
 | Group metadata cache TTL 5 menit | 🟡 Open | Low | Konfigurasikan sesuai kebutuhan |
+| AI model bias tambah tahun ke query search | 🟢 Resolved | Medium | Diatasi dgn instruksi eksplisit di system prompt + dynamic year injection |
 
 ## 📈 Performance Goals
 

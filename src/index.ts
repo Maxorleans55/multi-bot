@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { createSession, loadActiveSessions, disconnectAllSessions, getAllSessions } from './session/sessionHelper.js';
 import prisma from './database/prisma.js';
+import { registerAllTools } from './tools/index.js';
 
 // Set console encoding to UTF-8 for emoji support on Windows
 if (process.platform === 'win32') {
@@ -19,6 +20,9 @@ async function main() {
     console.error('❌ DATABASE_URL is not set in environment variables');
     process.exit(1);
   }
+
+  // Register AI tool definitions (function calling)
+  registerAllTools();
 
   // Get command line arguments BEFORE loading sessions so we know intent
   const args = process.argv.slice(2);

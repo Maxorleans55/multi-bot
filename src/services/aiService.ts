@@ -1,10 +1,14 @@
 import axios from 'axios';
+import toolRegistry from '../tools/toolRegistry.js';
+import type { AIToolCall as AIToolCallType, ToolContext } from '../types/tools.js';
 
 type Provider = 'openai' | 'openrouter' | 'ollama' | 'other';
 
 interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: AIToolCallType[];
+  tool_call_id?: string;
 }
 
 interface StreamChunk {
@@ -84,6 +88,14 @@ export class AIService {
     return !!this.apiKey;
   }
 
+  /**
+   * Check if the current provider supports function calling / tool use.
+   * Ollama does not support it; others do.
+   */
+  supportsFunctionCalling(): boolean {
+    return this.provider !== 'ollama';
+  }
+
   async chat(
     sessionId: string,
     userMessage: string,
@@ -129,6 +141,168 @@ export class AIService {
       return this.callOllamaStream(sessionId, messages, onChunk);
     }
     return this.callOpenAICompatibleStream(sessionId, messages, onChunk);
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  //  FUNCTION CALLING (TOOL USE) SUPPORT
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * Chat with tool/function calling support.
+   *
+   * Flow:
+   *   1. Send message + registered tools to AI
+   *   2. If AI responds with tool_calls → execute tools, send results back, get final answer
+   *   3. If AI responds normally → return response directly
+   *
+   * For Ollama (no function calling), falls back to regular chatStream.
+   *
+   * @param toolContext - Socket context so tools can send media directly to the user
+   */
+  async chatWithTools(
+    sessionId: string,
+    userMessage: string,
+    systemPrompt?: string,
+    onChunk?: StreamCallback,
+    toolContext?: ToolContext
+  ): Promise<string> {
+    if (!this.isConfigured()) {
+      throw new Error(this.getNotConfiguredMessage());
+    }
+
+    // ── Ollama: no function calling → regular stream ──
+    if (!this.supportsFunctionCalling()) {
+      console.log('[AIService] ⚠️ Provider does not support function calling. Falling back to regular chat.');
+      return this.chatStream(sessionId, userMessage, systemPrompt, onChunk);
+    }
+
+    const messages = this.getConversationHistory(sessionId);
+
+    if (systemPrompt && messages.length === 0) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+
+    messages.push({ role: 'user', content: userMessage });
+
+    // Get registered tool definitions
+    const tools = toolRegistry.hasTools() ? toolRegistry.getApiDefinitions() : undefined;
+
+    // ── Step 1: Make initial request with tools ──
+    const firstResponse = await this.callOpenAIWithTools(messages, tools);
+
+    // ── Step 2: Check if AI wants to use tools ──
+    if (firstResponse.tool_calls && firstResponse.tool_calls.length > 0) {
+      console.log(`[AIService] 🔧 AI requested ${firstResponse.tool_calls.length} tool call(s)`);
+
+      // Add assistant message with tool_calls to history
+      messages.push({
+        role: 'assistant',
+        content: null,
+        tool_calls: firstResponse.tool_calls,
+      });
+
+      // Show "processing" status to user
+      if (toolContext?.socket && toolContext?.fromJid) {
+        await toolContext.socket.sendPresenceUpdate('composing', toolContext.fromJid);
+      }
+
+      // Execute tool calls
+      const toolResults = await toolRegistry.executeToolCalls(firstResponse.tool_calls, toolContext || {});
+
+      // Add tool results to messages
+      for (const result of toolResults) {
+        messages.push(result);
+      }
+
+      // Save intermediate state (without final response yet)
+      this.conversationHistory.set(sessionId, messages);
+      this.setExpiry(sessionId);
+
+      // ── Step 3: Get final response with tool results ──
+      // Use streaming for the final answer so user sees typing effect
+      return this.callOpenAICompatibleStream(sessionId, messages, onChunk);
+    }
+
+    // ── No tool calls: return content directly ──
+    const content = firstResponse.content || '';
+
+    messages.push({ role: 'assistant', content });
+    this.conversationHistory.set(sessionId, messages);
+    this.setExpiry(sessionId);
+
+    // Emit content first, then done, so handler's `!chunk.done` check captures it
+    if (onChunk) {
+      if (content) {
+        onChunk({ content, done: false });
+      }
+      onChunk({ content: '', done: true });
+    }
+
+    return content;
+  }
+
+  /**
+   * Make a non-streaming request to the OpenAI-compatible API with optional tools.
+   * Returns both content and possible tool_calls.
+   */
+  private async callOpenAIWithTools(
+    messages: ChatMessage[],
+    tools?: any[]
+  ): Promise<{ content: string | null; tool_calls?: AIToolCallType[] }> {
+    try {
+      const body: Record<string, any> = {
+        model: this.model,
+        messages: messages,
+        stream: false,
+      };
+
+      if (tools && tools.length > 0) {
+        body.tools = tools;
+      }
+
+      const response = await axios.post<any>(
+        `${this.baseUrl}${OPENAI_COMPATIBLE_ENDPOINT}`,
+        body,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 60000,
+        }
+      );
+
+      const choice = response.data.choices?.[0];
+      const message = choice?.message;
+
+      if (!message) {
+        return { content: null };
+      }
+
+      // Check for tool_calls in response
+      if (message.tool_calls && message.tool_calls.length > 0) {
+        return {
+          content: null,
+          tool_calls: message.tool_calls.map((tc: any) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: {
+              name: tc.function?.name || '',
+              arguments: tc.function?.arguments || '{}',
+            },
+          })),
+        };
+      }
+
+      return { content: message.content || '' };
+    } catch (error: any) {
+      console.error(`[AIService] ${this.provider} API Error (tools):`, error.response?.data || error.message);
+      throw new Error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.error ||
+        'Failed to get AI response'
+      );
+    }
   }
 
   // ─────────── OpenAI-compatible (openai | openrouter) ───────────
@@ -179,13 +353,10 @@ export class AIService {
         stream: true,
       };
 
-      // OpenRouter-specific tools (only sent when provider is 'openrouter')
-      if (this.provider === 'openrouter') {
-        body.tools = [
-          { type: 'openrouter:datetime' },
-          { type: 'openrouter:web_search' },
-        ];
-      }
+      // NOTE: Do NOT send tool definitions here.
+      // Tools are only sent in the initial non-streaming request (callOpenAIWithTools).
+      // Sending tools in the streaming final step causes some models to write
+      // tool invocations as visible text instead of using proper function calling.
 
       const response = await axios.post(
         `${this.baseUrl}${OPENAI_COMPATIBLE_ENDPOINT}`,
