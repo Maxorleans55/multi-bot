@@ -1,7 +1,10 @@
 import axios from 'axios';
 import toolRegistry from '../tools/toolRegistry.js';
 import type { AIToolCall as AIToolCallType, ToolContext } from '../types/tools.js';
-import { TOOL_CALL_PATTERNS } from '../utils/toolCallFilter.js';
+import {
+  parseDsmlToolCalls,
+  stripToolCallArtifacts,
+} from '../utils/toolCallFilter.js';
 
 type Provider = 'openai' | 'openrouter' | 'ollama' | 'other';
 
@@ -82,17 +85,7 @@ export class AIService {
    * artifacts so they never reach the user.
    */
   private filterToolCallArtifacts(content: string): string {
-    if (!content) return content;
-
-    let filtered = content;
-    for (const pattern of TOOL_CALL_PATTERNS) {
-      filtered = filtered.replace(pattern, '');
-    }
-
-    // Clean up leftover whitespace / blank lines caused by removal
-    filtered = filtered.replace(/\n{3,}/g, '\n\n').trim();
-
-    return filtered;
+    return stripToolCallArtifacts(content);
   }
 
   getProvider(): Provider {
@@ -315,6 +308,25 @@ export class AIService {
               arguments: tc.function?.arguments || '{}',
             },
           })),
+        };
+      }
+
+      // Some models/providers serialize function calls into visible DSML text
+      // instead of returning the OpenAI-compatible `tool_calls` field. Recover
+      // those calls, but only for tool names included in this request.
+      const allowedToolNames = new Set<string>(
+        (tools || [])
+          .map((tool: any) => tool?.function?.name)
+          .filter((name: unknown): name is string => typeof name === 'string')
+      );
+      const dsmlToolCalls = parseDsmlToolCalls(message.content || '', allowedToolNames);
+      if (dsmlToolCalls.length > 0) {
+        console.warn(
+          `[AIService] Recovered ${dsmlToolCalls.length} DSML tool call(s) from model text output.`
+        );
+        return {
+          content: null,
+          tool_calls: dsmlToolCalls,
         };
       }
 

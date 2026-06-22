@@ -12,6 +12,7 @@
     "start": "node dist/index.js",
     "start:new": "node dist/index.js --",
     "start:dev": "node dist/index.js -- --session=dev --only",
+    "test:toolCallFilter": "tsx --test tests/toolCallFilter.test.ts",
     "type-check": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma db push",
