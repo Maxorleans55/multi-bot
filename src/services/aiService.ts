@@ -431,7 +431,7 @@ export class AIService {
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       let fullContent = '';
-      let buffer = '';
+      let sseBuffer = '';
       let timeoutId: NodeJS.Timeout;
       let resolved = false;
 
@@ -462,39 +462,42 @@ export class AIService {
         }
       }, 60000);
 
-      stream.on('data', (chunk: Buffer) => {
-        const lines = chunk.toString().split('\n');
+      const processSseLine = (line: string) => {
+        const normalizedLine = line.replace(/\r$/, '');
+        if (!normalizedLine.startsWith('data: ')) return;
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
+        const data = normalizedLine.slice(6);
+        if (data === '[DONE]') {
+          if (onChunk) onChunk({ content: '', done: true });
+          finish(fullContent);
+          return;
+        }
 
-            if (data === '[DONE]') {
-              if (onChunk) onChunk({ content: '', done: true });
-              finish(fullContent);
-              return;
-            }
+        try {
+          const parsed = JSON.parse(data);
+          const rawContent = parsed.choices?.[0]?.delta?.content;
 
-            try {
-              const parsed = JSON.parse(data);
-              const rawContent = parsed.choices?.[0]?.delta?.content;
+          if (rawContent) {
+            // Preserve token-leading whitespace. Filtering each token separately
+            // would trim spaces such as " info" before concatenation.
+            fullContent += rawContent;
+            const visibleContent = this.filterToolCallArtifacts(fullContent);
 
-              if (rawContent) {
-                // Filter out tool call artifacts BEFORE accumulating
-                const filtered = this.filterToolCallArtifacts(rawContent);
-                if (filtered) {
-                  fullContent += filtered;
-                  buffer += filtered;
-
-                  if (onChunk) {
-                    onChunk({ content: buffer, done: false });
-                  }
-                }
-              }
-            } catch (e) {
+            if (onChunk && visibleContent) {
+              onChunk({ content: visibleContent, done: false });
             }
           }
+        } catch {
+          // A complete but invalid SSE event is ignored.
         }
+      };
+
+      stream.on('data', (chunk: Buffer) => {
+        sseBuffer += chunk.toString();
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop() || '';
+
+        for (const line of lines) processSseLine(line);
       });
 
       stream.on('error', (error: any) => {
@@ -506,6 +509,7 @@ export class AIService {
       });
 
       stream.on('end', () => {
+        if (sseBuffer) processSseLine(sseBuffer);
         finish(fullContent);
       });
     });
@@ -583,7 +587,7 @@ export class AIService {
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       let fullContent = '';
-      let buffer = '';
+      let lineBuffer = '';
       let timeoutId: NodeJS.Timeout;
       let resolved = false;
 
@@ -614,39 +618,39 @@ export class AIService {
         }
       }, 120000);
 
-      stream.on('data', (chunk: Buffer) => {
-        const lines = chunk.toString().split('\n');
+      const processJsonLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
+        try {
+          const parsed = JSON.parse(trimmed);
+          const content = parsed.message?.content;
+          const done = parsed.done === true;
 
-          try {
-            const parsed = JSON.parse(trimmed);
-            const content = parsed.message?.content;
-            const done = parsed.done === true;
+          if (content) {
+            fullContent += content;
+            const visibleContent = this.filterToolCallArtifacts(fullContent);
 
-            if (content) {
-              // Filter out tool call artifacts BEFORE accumulating
-              const filtered = this.filterToolCallArtifacts(content);
-              if (filtered) {
-                fullContent += filtered;
-                buffer += filtered;
-
-                if (onChunk) {
-                  onChunk({ content: buffer, done: false });
-                }
-              }
+            if (onChunk && visibleContent) {
+              onChunk({ content: visibleContent, done: false });
             }
-
-            if (done) {
-              if (onChunk) onChunk({ content: '', done: true });
-              finish(fullContent);
-              return;
-            }
-          } catch (e) {
           }
+
+          if (done) {
+            if (onChunk) onChunk({ content: '', done: true });
+            finish(fullContent);
+          }
+        } catch {
+          // A complete but invalid JSON event is ignored.
         }
+      };
+
+      stream.on('data', (chunk: Buffer) => {
+        lineBuffer += chunk.toString();
+        const lines = lineBuffer.split('\n');
+        lineBuffer = lines.pop() || '';
+
+        for (const line of lines) processJsonLine(line);
       });
 
       stream.on('error', (error: any) => {
@@ -658,6 +662,7 @@ export class AIService {
       });
 
       stream.on('end', () => {
+        if (lineBuffer) processJsonLine(lineBuffer);
         finish(fullContent);
       });
     });
