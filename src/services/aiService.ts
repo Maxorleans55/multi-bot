@@ -1,6 +1,7 @@
 import axios from 'axios';
 import toolRegistry from '../tools/toolRegistry.js';
 import type { AIToolCall as AIToolCallType, ToolContext } from '../types/tools.js';
+import { TOOL_CALL_PATTERNS } from '../utils/toolCallFilter.js';
 
 type Provider = 'openai' | 'openrouter' | 'ollama' | 'other';
 
@@ -72,6 +73,26 @@ export class AIService {
     } else {
       console.log(`✅ [AIService] Provider: ${this.provider} | Model: ${this.model} | URL: ${this.baseUrl}`);
     }
+  }
+
+  /**
+   * Strip raw tool call artifacts from AI response text.
+   * Some models write tool invocations as visible text instead of using
+   * the proper function_call/tool_calls API. This method removes those
+   * artifacts so they never reach the user.
+   */
+  private filterToolCallArtifacts(content: string): string {
+    if (!content) return content;
+
+    let filtered = content;
+    for (const pattern of TOOL_CALL_PATTERNS) {
+      filtered = filtered.replace(pattern, '');
+    }
+
+    // Clean up leftover whitespace / blank lines caused by removal
+    filtered = filtered.replace(/\n{3,}/g, '\n\n').trim();
+
+    return filtered;
   }
 
   getProvider(): Provider {
@@ -224,7 +245,10 @@ export class AIService {
     }
 
     // ── No tool calls: return content directly ──
-    const content = firstResponse.content || '';
+    let content = firstResponse.content || '';
+
+    // Safety filter (already filtered in callOpenAIWithTools, but double-check)
+    content = this.filterToolCallArtifacts(content);
 
     messages.push({ role: 'assistant', content });
     this.conversationHistory.set(sessionId, messages);
@@ -294,7 +318,10 @@ export class AIService {
         };
       }
 
-      return { content: message.content || '' };
+      // Filter out any tool call artifacts that the model might have
+      // written as visible text instead of using proper tool_calls API
+      const filteredContent = this.filterToolCallArtifacts(message.content || '');
+      return { content: filteredContent };
     } catch (error: any) {
       console.error(`[AIService] ${this.provider} API Error (tools):`, error.response?.data || error.message);
       throw new Error(
@@ -401,13 +428,16 @@ export class AIService {
         resolved = true;
         clearTimeout(timeoutId);
 
-        if (content || !isError) {
-          if (content) {
-            messages.push({ role: 'assistant', content });
+        // Final safety filter on the fully accumulated content
+        const finalContent = this.filterToolCallArtifacts(content || '');
+
+        if (finalContent || !isError) {
+          if (finalContent) {
+            messages.push({ role: 'assistant', content: finalContent });
             this.conversationHistory.set(sessionId, messages);
             this.setExpiry(sessionId);
           }
-          resolve(content);
+          resolve(finalContent);
         } else {
           reject(new Error('Empty response from AI'));
         }
@@ -435,14 +465,18 @@ export class AIService {
 
             try {
               const parsed = JSON.parse(data);
-              const content = parsed.choices?.[0]?.delta?.content;
+              const rawContent = parsed.choices?.[0]?.delta?.content;
 
-              if (content) {
-                fullContent += content;
-                buffer += content;
+              if (rawContent) {
+                // Filter out tool call artifacts BEFORE accumulating
+                const filtered = this.filterToolCallArtifacts(rawContent);
+                if (filtered) {
+                  fullContent += filtered;
+                  buffer += filtered;
 
-                if (onChunk) {
-                  onChunk({ content: buffer, done: false });
+                  if (onChunk) {
+                    onChunk({ content: buffer, done: false });
+                  }
                 }
               }
             } catch (e) {
@@ -546,13 +580,16 @@ export class AIService {
         resolved = true;
         clearTimeout(timeoutId);
 
-        if (content || !isError) {
-          if (content) {
-            messages.push({ role: 'assistant', content });
+        // Final safety filter on the fully accumulated content
+        const finalContent = this.filterToolCallArtifacts(content || '');
+
+        if (finalContent || !isError) {
+          if (finalContent) {
+            messages.push({ role: 'assistant', content: finalContent });
             this.conversationHistory.set(sessionId, messages);
             this.setExpiry(sessionId);
           }
-          resolve(content);
+          resolve(finalContent);
         } else {
           reject(new Error('Empty response from Ollama'));
         }
@@ -578,11 +615,15 @@ export class AIService {
             const done = parsed.done === true;
 
             if (content) {
-              fullContent += content;
-              buffer += content;
+              // Filter out tool call artifacts BEFORE accumulating
+              const filtered = this.filterToolCallArtifacts(content);
+              if (filtered) {
+                fullContent += filtered;
+                buffer += filtered;
 
-              if (onChunk) {
-                onChunk({ content: buffer, done: false });
+                if (onChunk) {
+                  onChunk({ content: buffer, done: false });
+                }
               }
             }
 

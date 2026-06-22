@@ -1,6 +1,7 @@
 import aiService, { AIService } from './aiService.js';
 import type { ToolContext } from '../types/tools.js';
 import { getSystemPrompt } from './systemPrompt.js';
+import { stripToolCallArtifacts } from '../utils/toolCallFilter.js';
 
 const AI_MODE_SESSIONS = new Map<string, {
   enabled: boolean;
@@ -75,13 +76,16 @@ export class AIModeHandler {
       toolContext
     );
 
+    // Safety filter: strip any remaining tool call artifacts
+    const safeResponse = stripToolCallArtifacts(response);
+
     session.contextMessages.push({
       role: 'assistant',
-      content: response,
+      content: safeResponse,
       timestamp: Date.now(),
     });
 
-    return response;
+    return safeResponse;
   }
 
   enableAIMode(userId: string, mode: 'single' | 'chat' = 'chat'): void {

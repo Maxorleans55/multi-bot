@@ -8,6 +8,7 @@ import { isAIGroupEnabled, initAIGroupToggle } from '../services/groupToggle.js'
 import moment from 'moment';
 import NodeCache from 'node-cache';
 import { handleYouTubeButton } from '../utils/youtubeButtonHandler.js';
+import { stripToolCallArtifacts } from '../utils/toolCallFilter.js';
 
 moment.locale('jv');
 
@@ -555,9 +556,14 @@ export class BotHandler {
         message: originalMessage.message as proto.IMessage,
       });
 
-      await this.socket.sendMessage(to, {
-        text: fullResponse,
-      }, { quoted: quotedMessageObj });
+      // Safety filter: strip any remaining tool call artifacts
+      const safeResponse = stripToolCallArtifacts(fullResponse);
+
+      if (safeResponse) {
+        await this.socket.sendMessage(to, {
+          text: safeResponse,
+        }, { quoted: quotedMessageObj });
+      }
     } catch (error: any) {
       console.error(`[${this.sessionId}] ❌ Group Auto-Reply Error:`, error);
       await this.socket.sendMessage(to, {
@@ -598,6 +604,9 @@ export class BotHandler {
 
       await this.socket.sendPresenceUpdate('paused', to);
 
+      // Safety filter: strip any remaining tool call artifacts
+      const safeResponse = stripToolCallArtifacts(fullResponse);
+
       const quotedMessageObj = proto.WebMessageInfo.fromObject({
         key: {
           remoteJid: simplified.from,
@@ -608,9 +617,11 @@ export class BotHandler {
         message: originalMessage.message as proto.IMessage,
       });
 
-      await this.socket.sendMessage(to, {
-        text: fullResponse,
-      }, { quoted: quotedMessageObj });
+      if (safeResponse) {
+        await this.socket.sendMessage(to, {
+          text: safeResponse,
+        }, { quoted: quotedMessageObj });
+      }
     } catch (error: any) {
       console.error(`[${this.sessionId}] ❌ AI Error:`, error);
       await this.socket.sendMessage(to, {

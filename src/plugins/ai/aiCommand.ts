@@ -4,6 +4,7 @@ import type { ToolContext } from '../../types/tools.js';
 import aiService, { AIService } from '../../services/aiService.js';
 import { isOwner } from '../../config/botConfig.js';
 import { getSystemPrompt } from '../../services/systemPrompt.js';
+import { stripToolCallArtifacts } from '../../utils/toolCallFilter.js';
 
 const ACTIVE_SESSIONS = new Map<string, { enabled: boolean; mode: 'single' | 'chat' }>();
 
@@ -147,9 +148,10 @@ const AICommand: CommandModule = {
 
       await context.socket.sendPresenceUpdate('paused', context.fromJid);
 
-      if (responseBuffer) {
+      const safeResponse = stripToolCallArtifacts(responseBuffer);
+      if (safeResponse) {
         await context.socket.sendMessage(context.fromJid, {
-          text: responseBuffer,
+          text: safeResponse,
         });
       }
     } catch (error: any) {
