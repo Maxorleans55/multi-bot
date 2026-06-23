@@ -1,6 +1,14 @@
 import nexo from 'nexo-aio-downloader';
 import type { WASocket } from '@innovatorssoft/baileys';
 import { createRequire } from 'module';
+import {
+  getTwitterInfo,
+  downloadTwitterMedia,
+  buildTwitterCaption,
+  parseTwitterError,
+  detectFileType,
+  scheduleFileCleanup,
+} from '../utils/twitterDownloader.js';
 
 const require = createRequire(import.meta.url);
 const Tiktok = require('@tobyg74/tiktok-api-dl');
@@ -287,36 +295,76 @@ async function downloadFacebook(url: string, socket: WASocket, fromJid: string):
 
 async function downloadTwitter(url: string, socket: WASocket, fromJid: string): Promise<DownloadResult> {
   try {
-    const startTime = Date.now();
-    const result = await nexo.twitter(url);
+    await socket.sendMessage(fromJid, {
+      text: '⏳ Mendownload media dari Twitter/X...',
+    });
 
-    if (result.data?.result && result.data.result.length > 0) {
-      const mediaUrl = result.data.result[0].url;
-      const processTime = ((Date.now() - startTime) / 1000).toFixed(2);
+    // Step 1: Get tweet info
+    const info = await getTwitterInfo(url);
 
-      await socket.sendMessage(fromJid, {
-        video: { url: mediaUrl },
-        caption: `🐦 Twitter/X Video\n\n⏱️ Process Time: ${processTime} seconds\n\n_Downloaded automatically_`,
-      });
-
-      return {
-        success: true,
-        url: mediaUrl,
-        type: 'video',
-      };
+    if (!info || !info.title) {
+      await sendErrorMessage(socket, fromJid, '❌ Gagal mendapatkan informasi tweet. URL mungkin tidak valid.');
+      return { success: false, error: 'Gagal mendapatkan info tweet' };
     }
 
-    await sendErrorMessage(socket, fromJid, '❌ Gagal mengambil media dari Twitter/X. Link tidak valid atau media tidak ditemukan.');
+    // Step 2: Download media
+    const result = await downloadTwitterMedia(url, info);
+
+    if (!result.success || !result.filePath) {
+      if (result.error?.includes('Tidak ada media')) {
+        await socket.sendMessage(fromJid, {
+          text: `📝 *Tweet Info*\n\n👤 ${info.uploader || 'Unknown'} (@${info.uploader_id || 'unknown'})\n📄 ${info.title || ''}\n\n❌ Tidak ada media yang dapat diunduh dari tweet ini.`,
+        });
+      } else if (result.error?.includes('terlalu besar')) {
+        await sendErrorMessage(socket, fromJid, `⚠️ ${result.error}`);
+      } else {
+        await sendErrorMessage(socket, fromJid, `❌ ${result.error}`);
+      }
+      return { success: false, error: result.error || 'Gagal mendownload Twitter' };
+    }
+
+    // Step 3: Send media to user
+    const caption = buildTwitterCaption(
+      result.info || info,
+      result.fileSize || 0,
+      info.duration,
+      '_Downloaded automatically_'
+    );
+
+    const fileType = result.fileType || detectFileType(result.fileExt || '');
+
+    switch (fileType) {
+      case 'image':
+        await socket.sendMessage(fromJid, { image: { url: result.filePath }, caption });
+        break;
+      case 'video':
+        await socket.sendMessage(fromJid, { video: { url: result.filePath }, caption, mimetype: 'video/mp4' });
+        break;
+      case 'audio':
+        await socket.sendMessage(fromJid, { audio: { url: result.filePath }, mimetype: 'audio/mpeg' });
+        break;
+      default:
+        await socket.sendMessage(fromJid, {
+          document: { url: result.filePath },
+          mimetype: 'application/octet-stream',
+          fileName: `twitter_media${result.fileExt || ''}`,
+          caption,
+        });
+        break;
+    }
+
+    // Step 4: Cleanup
+    scheduleFileCleanup(result.filePath);
+
     return {
-      success: false,
-      error: 'Gagal mengambil media dari Twitter',
+      success: true,
+      url: result.filePath,
+      type: fileType === 'document' ? 'video' : fileType,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Twitter download error:', error);
-    await sendErrorMessage(socket, fromJid, '❌ Gagal mendownload dari Twitter/X. Link mungkin privat atau tidak valid.');
-    return {
-      success: false,
-      error: 'Gagal mendownload dari Twitter',
-    };
+    const errorMsg = parseTwitterError(error);
+    await sendErrorMessage(socket, fromJid, `❌ ${errorMsg}`);
+    return { success: false, error: 'Gagal mendownload dari Twitter' };
   }
 }

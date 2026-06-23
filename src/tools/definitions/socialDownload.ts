@@ -1,6 +1,14 @@
 import nexo from 'nexo-aio-downloader';
 import { createRequire } from 'module';
 import type { AIToolDefinition, ToolExecuteFunction, ToolContext } from '../../types/tools.js';
+import {
+  getTwitterInfo,
+  downloadTwitterMedia,
+  buildTwitterCaption,
+  parseTwitterError,
+  detectFileType,
+  scheduleFileCleanup,
+} from '../../utils/twitterDownloader.js';
 
 const require = createRequire(import.meta.url);
 const Tiktok = require('@tobyg74/tiktok-api-dl');
@@ -83,29 +91,77 @@ async function handleFacebook(url: string, context: ToolContext) {
 // ─── Twitter / X ─────────────────────────────────────────────────────────────
 
 async function handleTwitter(url: string, context: ToolContext) {
-  const result = await nexo.twitter(url);
+  try {
+    // Step 1: Get tweet info
+    const info = await getTwitterInfo(url);
 
-  if (result.data?.result && result.data.result.length > 0) {
-    const mediaUrl = result.data.result[0].url;
+    if (!info || !info.title) {
+      return {
+        success: false,
+        message: 'Gagal mendapatkan informasi tweet. URL mungkin tidak valid.',
+      };
+    }
+
+    // Step 2: Download media
+    const result = await downloadTwitterMedia(url, info);
+
+    if (!result.success || !result.filePath) {
+      return {
+        success: false,
+        message: result.error || 'Gagal mengunduh media dari Twitter/X.',
+      };
+    }
+
+    // Step 3: Send media to user
+    const caption = buildTwitterCaption(
+      result.info || info,
+      result.fileSize || 0,
+      info.duration,
+      '_Downloaded via AI_'
+    );
+
+    const fileType = result.fileType || detectFileType(result.fileExt || '');
+    let mediaType = 'video';
 
     if (context.socket && context.fromJid) {
-      await context.socket.sendMessage(context.fromJid, {
-        video: { url: mediaUrl },
-        caption: `🐦 Twitter/X Video\n\n_Downloaded via AI_`,
-      });
+      switch (fileType) {
+        case 'image':
+          await context.socket.sendMessage(context.fromJid, { image: { url: result.filePath }, caption });
+          mediaType = 'image';
+          break;
+        case 'video':
+          await context.socket.sendMessage(context.fromJid, { video: { url: result.filePath }, caption, mimetype: 'video/mp4' });
+          break;
+        case 'audio':
+          await context.socket.sendMessage(context.fromJid, { audio: { url: result.filePath }, mimetype: 'audio/mpeg' });
+          mediaType = 'audio';
+          break;
+        default:
+          await context.socket.sendMessage(context.fromJid, {
+            document: { url: result.filePath },
+            mimetype: 'application/octet-stream',
+            fileName: `twitter_media${result.fileExt || ''}`,
+            caption,
+          });
+          break;
+      }
     }
+
+    // Step 4: Cleanup
+    scheduleFileCleanup(result.filePath);
 
     return {
       success: true,
       message: 'Berhasil mendownload media dari Twitter/X. Media sudah dikirim ke user.',
-      data: { type: 'video', url: mediaUrl },
+      data: { type: mediaType, url: result.filePath },
+    };
+  } catch (error: any) {
+    console.error('[Tool:Twitter] Download error:', error);
+    return {
+      success: false,
+      message: parseTwitterError(error),
     };
   }
-
-  return {
-    success: false,
-    message: 'Gagal mengambil media dari Twitter/X. Link mungkin tidak valid atau tweet tidak memiliki media.',
-  };
 }
 
 // ─── TikTok ──────────────────────────────────────────────────────────────────
