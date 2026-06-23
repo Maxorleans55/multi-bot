@@ -1,4 +1,57 @@
 import type { AIToolDefinition, ToolExecuteFunction } from '../../types/tools.js';
+import path from 'path';
+import { promises as fs } from 'fs';
+
+interface YoutubeDlInfo {
+  id?: string;
+  title?: string;
+  uploader?: string;
+  duration?: number;
+  webpage_url?: string;
+}
+
+const isYouTubeUrl = (input: string): boolean =>
+  /^(?:https?:\/\/)?(?:(?:www|m|music)\.)?(?:youtube\.com|youtu\.be)\//i.test(input);
+
+const normalizeYouTubeUrl = (input: string): string =>
+  /^https?:\/\//i.test(input) ? input : `https://${input}`;
+
+const baseYoutubeDlFlags = {
+  noWarnings: true,
+  noCheckCertificates: true,
+  preferFreeFormats: true,
+};
+
+const resolveYoutubeInput = async (
+  youtubeDl: (input: string, flags?: Record<string, any>, options?: Record<string, any>) => Promise<unknown>,
+  input: string,
+  tempDir: string
+): Promise<YoutubeDlInfo | null> => {
+  const trimmedInput = input.trim();
+
+  if (isYouTubeUrl(trimmedInput)) {
+    return await youtubeDl(normalizeYouTubeUrl(trimmedInput), {
+      ...baseYoutubeDlFlags,
+      dumpJson: true,
+    }, { cwd: tempDir }) as YoutubeDlInfo;
+  }
+
+  const searchResult = await youtubeDl(trimmedInput, {
+    ...baseYoutubeDlFlags,
+    printJson: true,
+    simulate: true,
+    skipDownload: true,
+    defaultSearch: 'ytsearch1',
+  }, { cwd: tempDir }) as YoutubeDlInfo;
+
+  if (!searchResult?.webpage_url) {
+    return searchResult?.id
+      ? { ...searchResult, webpage_url: `https://www.youtube.com/watch?v=${searchResult.id}` }
+      : null;
+  }
+
+  return searchResult;
+};
 
 /**
  * YouTube tool definition.
@@ -9,13 +62,13 @@ export const definition: AIToolDefinition = {
   type: 'function',
   function: {
     name: 'download_youtube',
-    description: 'Download media from YouTube. Requires a valid YouTube URL. Supports video and audio formats. Can send as document for larger file size limit (up to 2GB).',
+    description: 'Download media from YouTube using a YouTube URL or a search query/song title. Supports video and audio formats. Can send as document for larger file size limit (up to 2GB).',
     parameters: {
       type: 'object',
       properties: {
         url: {
           type: 'string',
-          description: 'The full YouTube URL (e.g. https://youtube.com/watch?v=xxx or https://youtu.be/xxx)',
+          description: 'A full YouTube URL (e.g. https://youtube.com/watch?v=xxx) or a search query/song title (e.g. Jangan Paksa Rindu).',
         },
         format: {
           type: 'string',
@@ -38,9 +91,9 @@ export const definition: AIToolDefinition = {
 };
 
 export const execute: ToolExecuteFunction = async (args, context) => {
-  const url = args.url as string;
-  if (!url) {
-    return { success: false, message: 'URL YouTube tidak diberikan.' };
+  const input = (args.url as string | undefined)?.trim();
+  if (!input) {
+    return { success: false, message: 'URL atau judul YouTube tidak diberikan.' };
   }
 
   const format = (args.format as string) || 'video';
@@ -49,22 +102,24 @@ export const execute: ToolExecuteFunction = async (args, context) => {
 
   try {
     const { youtubeDl } = await import('youtube-dl-exec');
-    const tempDir = (await import('path')).join(process.cwd(), 'temp');
-    const fs = await import('fs/promises');
+    const tempDir = path.join(process.cwd(), 'temp');
 
     await fs.mkdir(tempDir, { recursive: true });
 
-    // Get video info first
-    const info = await youtubeDl(url, {
-      noWarnings: true,
-      callHome: false,
-      noCheckCertificates: true,
-      preferFreeFormats: true,
-      dumpJson: true,
-    }, { cwd: tempDir }) as any;
+    const initialInfo = await resolveYoutubeInput(youtubeDl as any, input, tempDir);
+    const resolvedUrl = initialInfo?.webpage_url ||
+      (initialInfo?.id ? `https://www.youtube.com/watch?v=${initialInfo.id}` : isYouTubeUrl(input) ? normalizeYouTubeUrl(input) : input);
+
+    // Get complete video info first. Search results can be partial.
+    const info = isYouTubeUrl(resolvedUrl)
+      ? await youtubeDl(resolvedUrl, {
+        ...baseYoutubeDlFlags,
+        dumpJson: true,
+      }, { cwd: tempDir }) as YoutubeDlInfo
+      : initialInfo;
 
     if (!info || !info.title) {
-      return { success: false, message: 'Gagal mendapatkan info video YouTube. URL mungkin tidak valid.' };
+      return { success: false, message: 'Gagal menemukan video YouTube dari URL atau judul yang diberikan.' };
     }
 
     const title = info.title || 'Unknown';
@@ -76,11 +131,8 @@ export const execute: ToolExecuteFunction = async (args, context) => {
 
     // Download
     const downloadFlags: Record<string, any> = {
-      noWarnings: true,
-      callHome: false,
-      noCheckCertificates: true,
-      preferFreeFormats: true,
-      output: (await import('path')).join(tempDir, `${info.id || 'video'}.%(ext)s`),
+      ...baseYoutubeDlFlags,
+      output: path.join(tempDir, `${info.id || 'video'}.%(ext)s`),
     };
 
     if (format === 'audio') {
@@ -96,10 +148,10 @@ export const execute: ToolExecuteFunction = async (args, context) => {
       downloadFlags.mergeOutputFormat = 'mp4';
     }
 
-    await youtubeDl(url, downloadFlags, { cwd: tempDir });
+    await youtubeDl(resolvedUrl, downloadFlags, { cwd: tempDir });
 
     const ext = format === 'audio' ? 'mp3' : 'mp4';
-    const filePath = (await import('path')).join(tempDir, `${info.id || 'video'}.${ext}`);
+    const filePath = path.join(tempDir, `${info.id || 'video'}.${ext}`);
     const stats = await fs.stat(filePath);
 
     // Document mode: 2GB limit, regular mode: 50MB limit (WhatsApp media cap)
@@ -153,7 +205,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     return {
       success: true,
       message: `Berhasil mendownload ${format === 'audio' ? 'audio' : 'video'} YouTube "${title}". Media sudah dikirim ke user.`,
-      data: { title, uploader, duration: durationStr, format, quality, fileSize: stats.size, asDocument },
+      data: { title, uploader, duration: durationStr, format, quality, fileSize: stats.size, asDocument, resolvedUrl },
     };
   } catch (error: any) {
     console.error('[Tool:YouTube] Download error:', error);

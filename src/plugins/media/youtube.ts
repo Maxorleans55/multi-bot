@@ -78,7 +78,6 @@ const formatUploadDate = (date?: string): string => {
 interface YtDlOptions {
   cwd: string;
   noWarnings: boolean;
-  noCallHome: boolean;
   noCheckCertificate: boolean;
   preferFreeFormats: boolean;
   extractAudio?: boolean;
@@ -101,7 +100,6 @@ const downloadMedia = async (context: CommandContext, url: string, format: 'vide
   // Step 1: Get video info first (no download)
   const infoOptions: Flags = {
     noWarnings: true,
-    callHome: false,
     noCheckCertificates: true,
     preferFreeFormats: true,
     dumpJson: true,
@@ -116,7 +114,6 @@ const downloadMedia = async (context: CommandContext, url: string, format: 'vide
   // Step 2: Download with specific format
   const downloadFlags: Flags = {
     noWarnings: true,
-    callHome: false,
     noCheckCertificates: true,
     preferFreeFormats: true,
     output: path.join(tempDir, `${info.id || 'video'}.%(ext)s`),
@@ -238,7 +235,6 @@ const youtubeCommand: CommandModule = {
 
         const searchOptions: Flags = {
           noWarnings: true,
-          callHome: false,
           noCheckCertificates: true,
           preferFreeFormats: true,
           printJson: true,
@@ -294,7 +290,6 @@ const youtubeCommand: CommandModule = {
 
         const infoOptions: Flags = {
           noWarnings: true,
-          callHome: false,
           noCheckCertificates: true,
           preferFreeFormats: true,
           printJson: true,

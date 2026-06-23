@@ -117,7 +117,6 @@ export async function getTwitterInfo(url: string): Promise<TwitterMediaInfo> {
 
   const info: TwitterMediaInfo = await youtubeDl(url, {
     noWarnings: true,
-    callHome: false,
     noCheckCertificates: true,
     preferFreeFormats: true,
     dumpJson: true,
@@ -149,7 +148,6 @@ export async function downloadTwitterMedia(url: string, info: TwitterMediaInfo):
   // Try download with bestvideo+bestaudio first
   const downloadFlags: Flags = {
     noWarnings: true,
-    callHome: false,
     noCheckCertificates: true,
     preferFreeFormats: true,
     output: outputBase,
@@ -164,7 +162,6 @@ export async function downloadTwitterMedia(url: string, info: TwitterMediaInfo):
     try {
       const fallbackFlags: Flags = {
         noWarnings: true,
-        callHome: false,
         noCheckCertificates: true,
         preferFreeFormats: true,
         output: outputBase,

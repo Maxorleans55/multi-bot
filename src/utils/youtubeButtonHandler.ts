@@ -71,7 +71,6 @@ async function downloadYouTubeMedia(context: CommandContext, url: string, format
   // Step 1: Get video info first (no download)
   const infoOptions: Flags = {
     noWarnings: true,
-    callHome: false,
     noCheckCertificates: true,
     preferFreeFormats: true,
     dumpJson: true,
@@ -86,7 +85,6 @@ async function downloadYouTubeMedia(context: CommandContext, url: string, format
   // Step 2: Download with specific format
   const downloadFlags: Flags = {
     noWarnings: true,
-    callHome: false,
     noCheckCertificates: true,
     preferFreeFormats: true,
     output: path.join(tempDir, `${info.id || 'video'}.%(ext)s`),
