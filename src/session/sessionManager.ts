@@ -26,7 +26,7 @@ export type SessionDisconnectCallback = (sessionId: string) => void | Promise<vo
 export class SessionManager {
   private sessions: Map<string, WASocket> = new Map();
   private reconnectAttempts: Map<string, number> = new Map();
-  private maxReconnectAttempts = 5;
+  private maxReconnectAttempts = 10;
   private sessionCallbacks: SessionCallback[] = [];
   private disconnectCallbacks: SessionDisconnectCallback[] = [];
   private saveCredsMap: Map<string, () => Promise<void>> = new Map();
