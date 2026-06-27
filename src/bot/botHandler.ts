@@ -9,6 +9,9 @@ import moment from 'moment';
 import NodeCache from 'node-cache';
 import { handleYouTubeButton } from '../utils/youtubeButtonHandler.js';
 import { stripToolCallArtifacts } from '../utils/toolCallFilter.js';
+import { validateMessage, validateJid } from '../utils/messageValidator.js';
+import { rateLimiter } from '../utils/rateLimiter.js';
+import { log } from '../utils/logger.js';
 
 moment.locale('jv');
 
@@ -39,22 +42,31 @@ export class BotHandler {
   private groupCache: NodeCache;
 
   constructor(socket: WASocket, sessionId: string) {
-    console.log(`🤖 [BotHandler] Creating handler for session: ${sessionId}`);
+    log.info(`🤖 [BotHandler] Creating handler for session: ${sessionId}`);
     this.socket = socket;
     this.sessionId = sessionId;
     this.pluginManager = new PluginManager();
     this.groupCache = new NodeCache({ stdTTL: 3600, checkperiod: 600 });
     this.setupEventHandlers();
-    console.log(`✅ [BotHandler] Event handlers attached for session: ${this.sessionId}`);
+    log.info(`✅ [BotHandler] Event handlers attached for session: ${this.sessionId}`);
   }
 
   async loadPlugins(): Promise<void> {
-    await this.pluginManager.loadPlugins();
-    await initAIGroupToggle();
+    try {
+      await this.pluginManager.loadPlugins();
+      await initAIGroupToggle();
+    } catch (error) {
+      log.error(`[${this.sessionId}] ❌ Failed to load plugins:`, error as object);
+      // Don't throw — allow the bot to run even if plugin loading partially fails
+    }
   }
 
   async unloadPlugins(): Promise<void> {
-    await this.pluginManager.unloadPlugins();
+    try {
+      await this.pluginManager.unloadPlugins();
+    } catch (error) {
+      log.error(`[${this.sessionId}] ❌ Failed to unload plugins:`, error as object);
+    }
   }
 
   private async getGroupName(jid: string): Promise<string | null> {
@@ -77,7 +89,7 @@ export class BotHandler {
 
       return groupName;
     } catch (error) {
-      console.error('Error getting group name:', error);
+      log.error(`[${this.sessionId}] ⚠️ Error getting group name for ${jid}:`, error as object);
       return null;
     }
   }
@@ -270,48 +282,66 @@ export class BotHandler {
   }
 
   private setupEventHandlers(): void {
-    console.log(`🔌 [BotHandler] Setting up event handlers for session: ${this.sessionId}`);
+    log.info(`🔌 [BotHandler] Setting up event handlers for session: ${this.sessionId}`);
 
     // Handle messages
     this.socket.ev.on('messages.upsert', async ({ messages, type }) => {
-      // console.log(`📨 [BotHandler] messages.upsert event triggered, type: ${type}, messages count: ${messages.length}`);
-      // console.log(`📨 [BotHandler] Message keys:`, messages.map(m => ({
-      //   remoteJid: m.key.remoteJid,
-      //   fromMe: m.key.fromMe,
-      //   id: m.key.id,
-      //   hasMessage: !!m.message
-      // })));
-      if (type === 'notify') {
-        for (const message of messages) {
+      if (type !== 'notify') return;
+
+      for (const message of messages) {
+        // Wrap each message in its own try/catch so one bad message never blocks the rest
+        try {
           await this.handleMessage(message);
+        } catch (error) {
+          log.error(
+            `[${this.sessionId}] ❌ Fatal error processing message ${message.key?.id || '(no id)'}:`,
+            error as object,
+          );
+          // Recovery: attempt to mark presence as paused so the user knows something happened
+          try {
+            const jid = message.key?.remoteJid;
+            if (jid) {
+              await this.socket.sendPresenceUpdate('paused', jid);
+            }
+          } catch {
+            // Presence update failure is non-critical — swallow it
+          }
         }
       }
     });
 
-    // Handle message updates
-    // this.socket.ev.on('messages.update', async (updates) => {
-    //   console.log(`📝 [BotHandler] messages.update event triggered, count: ${updates.length}`);
-    //   for (const update of updates) {
-    //     await this.handleMessageUpdate(update);
-    //   }
-    // });
-
     // Handle group events
     this.socket.ev.on('group-participants.update', async (event) => {
-      console.log(`👥 [BotHandler] group-participants.update event triggered`);
-      await this.handleGroupEvent(event);
+      try {
+        log.info(`👥 [BotHandler] group-participants.update event triggered`);
+        await this.handleGroupEvent(event);
+      } catch (error) {
+        log.error(`[${this.sessionId}] ❌ Error in group-participants.update handler:`, error as object);
+      }
     });
 
-    // Log all events for debugging
+    // Connection update logging
     this.socket.ev.on('connection.update', (update) => {
-      console.log(`🔗 [BotHandler] connection.update:`, Object.keys(update));
+      log.debug(`[${this.sessionId}] 🔗 connection.update: ${Object.keys(update).join(', ')}`);
     });
 
+    // Creds update logging
     this.socket.ev.on('creds.update', () => {
-      console.log(`🔑 [BotHandler] creds.update triggered`);
+      log.debug(`[${this.sessionId}] 🔑 creds.update triggered`);
     });
 
-    console.log(`✅ [BotHandler] All event handlers registered for session: ${this.sessionId}`);
+    // Handle call events gracefully (avoid crash on calls)
+    this.socket.ev.on('call', async (calls) => {
+      try {
+        for (const call of calls) {
+          log.info(`[${this.sessionId}] 📞 Call from ${call.from}: ${call.status}`);
+        }
+      } catch (error) {
+        log.error(`[${this.sessionId}] ❌ Error handling call event:`, error as object);
+      }
+    });
+
+    log.info(`✅ [BotHandler] All event handlers registered for session: ${this.sessionId}`);
   }
 
   private printLog(msg: ReturnType<typeof this.simplified>): void {
@@ -345,63 +375,121 @@ export class BotHandler {
 
   private async handleMessage(message: WAMessage): Promise<void> {
     try {
+      // ── Step 1: Raw structural validation ────────────────────────────────
       if (!message.message) {
         return;
       }
 
+      // ── Step 2: Comprehensive message validation ─────────────────────────
+      const validation = validateMessage(message as unknown as Record<string, any>);
+
+      if (!validation.valid) {
+        // Log silently for common noise (self-sent, fromMe, duplicates)
+        // Only warn on unexpected rejection reasons
+        if (
+          validation.code === 'FROM_ME_IGNORED' ||
+          validation.code === 'DUPLICATE_MESSAGE'
+        ) {
+          log.debug(`[${this.sessionId}] ℹ️ Message filtered: ${validation.reason}`);
+        } else {
+          log.warn(`[${this.sessionId}] ⚠️ Message rejected: ${validation.reason}`);
+        }
+        return;
+      }
+
+      // ── Step 3: Simplify message ─────────────────────────────────────────
       const simplified = this.simplified(message);
 
       // Get actual group name with caching
       if (simplified.isGroup && simplified.from) {
-        const actualGroupName = await this.getGroupName(simplified.from);
-        if (actualGroupName) {
-          (simplified as any).groupName = actualGroupName;
+        try {
+          const actualGroupName = await this.getGroupName(simplified.from);
+          if (actualGroupName) {
+            (simplified as any).groupName = actualGroupName;
+          }
+        } catch (error) {
+          log.error(`[${this.sessionId}] ⚠️ Failed to fetch group name for ${simplified.from}:`, error as object);
+          // Non-fatal — continue processing
         }
       }
 
       this.printLog(simplified);
-      // console.log(`[${this.sessionId}] 💾 Message details -`, simplified);
 
-      // Save message to database
-      // await prisma.message.create({
-      //   data: {
-      //     sessionId: this.sessionId,
-      //     key: message.key as any,
-      //     message: message.message as any,
-      //     messageTimestamp: BigInt(message.messageTimestamp || Date.now()),
-      //     fromMe: simplified.fromMe ?? false,
-      //     pushName: simplified.pushName,
-      //   },
-      // });
-
-      // Process the message
+      // ── Step 4: Process the message ──────────────────────────────────────
       await this.processMessage(message, simplified);
     } catch (error) {
-      console.error(`[${this.sessionId}] ❌ Error handling message:`, error);
+      log.error(`[${this.sessionId}] ❌ Error handling message:`, error as object);
+
+      // ── Recovery: Notify user if possible ────────────────────────────────
+      try {
+        const jid = message.key?.remoteJid;
+        if (jid) {
+          await this.socket.sendMessage(jid, {
+            text: '❌ Terjadi kesalahan internal. Silakan coba lagi.',
+          });
+        }
+      } catch {
+        // Best-effort recovery notification — swallow failure
+      }
     }
   }
 
   private async handleMessageUpdate(update: WAMessageUpdate): Promise<void> {
     try {
-      console.log('Message update:', update);
+      log.debug(`[${this.sessionId}] 📝 Message update received`, update as unknown as object);
       // Handle message updates (read receipts, edits, etc.)
     } catch (error) {
-      console.error('Error handling message update:', error);
+      log.error(`[${this.sessionId}] ❌ Error handling message update:`, error as object);
     }
   }
 
   private async handleGroupEvent(event: any): Promise<void> {
     try {
-      console.log('Group event:', event);
-      // Handle group participant events (join, leave, promote, demote)
+      log.info(`[${this.sessionId}] 👥 Group event: ${event.action || 'unknown'} in ${event.id}`);
+
+      // Invalidate group name cache so next fetch gets fresh metadata
+      if (event.id) {
+        this.groupCache.del(event.id);
+      }
+
+      // TODO: Handle join/leave messages, promote/demote notifications
     } catch (error) {
-      console.error('Error handling group event:', error);
+      log.error(`[${this.sessionId}] ❌ Error handling group event:`, error as object);
     }
   }
 
   private async processMessage(message: WAMessage, simplified: ReturnType<typeof this.simplified>): Promise<void> {
     try {
       const { command, args, botNumber, from, isCmd, body, isGroup, user_id, mentions, message: rawMessage, quotedInfo } = simplified;
+
+      // Validate user_id JID
+      if (user_id) {
+        const jidValidation = validateJid(user_id);
+        if (!jidValidation.valid) {
+          log.warn(`[${this.sessionId}] ⚠️ Invalid user_id JID: ${user_id} — skipping message`);
+          return;
+        }
+      }
+
+      // Validate from JID
+      if (from) {
+        const fromJidValidation = validateJid(from);
+        if (!fromJidValidation.valid) {
+          log.warn(`[${this.sessionId}] ⚠️ Invalid from JID: ${from} — skipping message`);
+          return;
+        }
+      }
+
+      // ── Rate limiting check (non-commands only) ────────────────────────
+      // Commands skip this — they have their own per-command rate limit below
+      // with a proper cooldown message.
+      if (user_id && !isCmd) {
+        const rateCheck = rateLimiter.checkMessage(user_id);
+        if (!rateCheck.allowed) {
+          log.debug(`[${this.sessionId}] ⏱ Rate-limited non-command message from ${user_id} (${rateCheck.remainingMs}ms remaining)`);
+          return;
+        }
+      }
 
       // Check maintenance mode (only for commands, owners can bypass)
       if (isMaintenance() && isCmd && !isOwner(user_id || '')) {
@@ -411,77 +499,131 @@ export class BotHandler {
         return;
       }
 
-      // Group auto-reply: respond when bot is tagged, greeted, or replied
+      // ── Group auto-reply: respond when bot is tagged, greeted, or replied ─
       if (isGroup && !isCmd && from) {
+        try {
+          const botId = this.socket.user?.id?.split(':')[0];
+          const botLid = this.socket.user?.lid?.split(':')[0];
+          const botNumberJid = botId ? `${botId}@s.whatsapp.net` : '';
+          const botNumberLid = botLid ? `${botLid}@lid` : '';
 
-        const botId = this.socket.user?.id?.split(':')[0];
-        const botLid = this.socket.user?.lid?.split(':')[0];
-        const botNumberJid = botId ? `${botId}@s.whatsapp.net` : '';
-        const botNumberLid = botLid ? `${botLid}@lid` : '';
+          const isBotMentioned = (mentions || []).some((m: string) =>
+            (botNumberLid && m.includes(botNumberLid)) ||
+            (botNumberJid && m.includes(botNumberJid)) ||
+            m.includes(botNumberJid.split('@')[0])
+          );
 
-        const isBotMentioned = (mentions || []).some((m: string) =>
-          (botNumberLid && m.includes(botNumberLid)) ||
-          (botNumberJid && m.includes(botNumberJid)) ||
-          m.includes(botNumberJid.split('@')[0])
-        );
+          let isReplyToBot = false;
+          const tagAll = quotedInfo && (quotedInfo.nonJidMentions === 1)
+          if (quotedInfo?.quotedMessage) {
+            const quotedParticipant = quotedInfo.participant || '';
+            isReplyToBot = (botNumberLid && quotedParticipant.includes(botNumberLid)) ||
+              (botNumberJid && quotedParticipant.includes(botNumberJid)) ||
+              false;
+          }
 
-        let isReplyToBot = false;
-        const tagAll = quotedInfo && (quotedInfo.nonJidMentions === 1)
-        if (quotedInfo?.quotedMessage) {
-          const quotedParticipant = quotedInfo.participant || '';
-          isReplyToBot = (botNumberLid && quotedParticipant.includes(botNumberLid)) ||
-            (botNumberJid && quotedParticipant.includes(botNumberJid)) ||
-            false;
-        }
+          const isCalled = body?.toLowerCase() ? /(^|\s)(bot\b|bang\s*bot\b|kak\s*bot\b|mas\s*bot\b)/i.test(body) : false;
 
-        const isCalled = body?.toLowerCase() ? /(^|\s)(bot\b|bang\s*bot\b|kak\s*bot\b|mas\s*bot\b)/i.test(body) : false;
-
-        if ((isBotMentioned || isReplyToBot || isCalled || tagAll) && isAIGroupEnabled(from)) {
-          console.log(`[${this.sessionId}] 🤖 Group auto-reply triggered for: ${from}`);
-          await this.handleGroupAutoReply(simplified, from, message);
-          return;
+          if ((isBotMentioned || isReplyToBot || isCalled || tagAll) && isAIGroupEnabled(from)) {
+            // Rate-limit group auto-reply per-user
+            if (user_id) {
+              const aiRateCheck = rateLimiter.check(user_id, '__GROUP_AI__', 3); // 3s per user
+              if (!aiRateCheck.allowed) {
+                log.debug(`[${this.sessionId}] ⏱ Rate-limited group AI reply for ${user_id}`);
+                return;
+              }
+            }
+            log.info(`[${this.sessionId}] 🤖 Group auto-reply triggered for: ${from}`);
+            await this.handleGroupAutoReply(simplified, from, message);
+            return;
+          }
+        } catch (error) {
+          log.error(`[${this.sessionId}] ❌ Error in group auto-reply logic:`, error as object);
+          // Non-fatal — continue to other handlers
         }
       }
 
-      // Check if AI mode is enabled for this user (only for non-commands, private chat only)
-      const aiEnabled = isAIModeEnabled(user_id || simplified.from || '');
-      if (!isCmd && aiEnabled && body && from && !isGroup) {
-        await this.handleAIMessage(simplified, body, from, message);
-        return;
+      // ── AI mode (private chat only) ────────────────────────────────────
+      if (!isCmd && from && !isGroup) {
+        try {
+          const aiEnabled = isAIModeEnabled(user_id || simplified.from || '');
+          if (aiEnabled && body) {
+            // Rate-limit AI messages per-user
+            if (user_id) {
+              const aiRateCheck = rateLimiter.check(user_id, '__AI_CHAT__', 2); // 2s per user
+              if (!aiRateCheck.allowed) {
+                log.debug(`[${this.sessionId}] ⏱ Rate-limited AI message from ${user_id}`);
+                return;
+              }
+            }
+            await this.handleAIMessage(simplified, body, from, message);
+            return;
+          }
+        } catch (error) {
+          log.error(`[${this.sessionId}] ❌ Error in AI mode check:`, error as object);
+          // Non-fatal — continue
+        }
       }
 
-      // Auto-detect social media links
+      // ── Auto-detect social media links ─────────────────────────────────
       if (body && !isCmd && from && !isGroup) {
-        const socialLink = detectSocialMediaLink(body);
-        if (socialLink) {
-          console.log(`[${this.sessionId}] 🔗 Social media link detected: ${socialLink.platform} - ${socialLink.url}`);
-          await downloadFromSocialMedia(socialLink, this.socket, from);
-          return;
+        try {
+          const socialLink = detectSocialMediaLink(body);
+          if (socialLink) {
+            log.info(`[${this.sessionId}] 🔗 Social media link detected: ${socialLink.platform} - ${socialLink.url}`);
+            await downloadFromSocialMedia(socialLink, this.socket, from);
+            return;
+          }
+        } catch (error) {
+          log.error(`[${this.sessionId}] ❌ Error detecting/downloading social media link:`, error as object);
+          // Non-fatal — continue to other handlers
         }
       }
 
+      // ── Button reply handling ──────────────────────────────────────────
       const isButtonReply =
         simplified.isTemplateButtonReplyMessage ||
         simplified.isButtonResponseMessage ||
         simplified.isInteractiveResponseMessage;
 
       if (isButtonReply && simplified.message_button) {
-        const context = {
-          socket: this.socket,
-          sessionId: this.sessionId,
-          fromJid: from!!,
-          fromMe: simplified.fromMe ?? false,
-          pushName: simplified.pushName ?? undefined,
-          messageTimestamp: simplified.messageTimeStamp ? Number(simplified.messageTimeStamp) : undefined,
-          message,
-          simplified,
-          pluginManager: this.pluginManager,
-        };
-        await handleYouTubeButton(context, simplified.message_button);
-        return;
+        try {
+          const context = {
+            socket: this.socket,
+            sessionId: this.sessionId,
+            fromJid: from!!,
+            fromMe: simplified.fromMe ?? false,
+            pushName: simplified.pushName ?? undefined,
+            messageTimestamp: simplified.messageTimeStamp ? Number(simplified.messageTimeStamp) : undefined,
+            message,
+            simplified,
+            pluginManager: this.pluginManager,
+          };
+          await handleYouTubeButton(context, simplified.message_button);
+          return;
+        } catch (error) {
+          log.error(`[${this.sessionId}] ❌ Error handling button reply:`, error as object);
+          if (from) {
+            await this.socket.sendMessage(from, { text: '❌ Gagal memproses tombol. Silakan coba lagi.' });
+          }
+          return;
+        }
       }
 
+      // ── Command execution ──────────────────────────────────────────────
       if (isCmd && command && from) {
+        // Rate-limit command execution per-user
+        if (user_id) {
+          const cmdRateCheck = rateLimiter.check(user_id, command, 2); // 2s default per-command
+          if (!cmdRateCheck.allowed) {
+            log.debug(`[${this.sessionId}] ⏱ Rate-limited command "${command}" from ${user_id}`);
+            await this.socket.sendMessage(from, {
+              text: `⏱ Mohon tunggu ${Math.ceil(cmdRateCheck.remainingMs / 1000)} detik sebelum menggunakan perintah \`${command}\` lagi.`,
+            });
+            return;
+          }
+        }
+
         const context = {
           socket: this.socket,
           sessionId: this.sessionId,
@@ -494,27 +636,56 @@ export class BotHandler {
           pluginManager: this.pluginManager,
         };
 
-        const executed = await this.pluginManager.executeCommand(command, context, args);
+        try {
+          const executed = await this.pluginManager.executeCommand(command, context, args);
 
-        if (!executed) {
-          await this.socket.sendMessage(from, {
-            text: `❌ Command "${simplified.matchedPrefix || '!'}${command}" not found. Use ${simplified.matchedPrefix || '!'}help to see available commands.`,
-          });
+          if (!executed) {
+            await this.socket.sendMessage(from, {
+              text: `❌ Command "${simplified.matchedPrefix || '!'}${command}" not found. Use ${simplified.matchedPrefix || '!'}help to see available commands.`,
+            });
+          }
+        } catch (error) {
+          log.error(`[${this.sessionId}] ❌ Error executing command "${command}":`, error as object);
+          try {
+            await this.socket.sendMessage(from, {
+              text: '❌ Terjadi kesalahan saat menjalankan perintah. Silakan coba lagi.',
+            });
+          } catch {
+            // Last-resort recovery — swallow send failure
+          }
         }
       }
     } catch (error) {
-      console.error(`[${this.sessionId}] ❌ Error processing message:`, error);
+      log.error(`[${this.sessionId}] ❌ Fatal error in processMessage:`, error as object);
+
+      // Last-resort recovery: notify user
+      try {
+        const from = simplified.from;
+        if (from) {
+          await this.socket.sendMessage(from, {
+            text: '❌ Terjadi kesalahan internal yang tidak terduga. Silakan coba lagi.',
+          });
+        }
+      } catch {
+        // Completely unrecoverable — swallow
+      }
     }
   }
 
   private async handleGroupAutoReply(simplified: ReturnType<typeof this.simplified>, to: string, originalMessage: WAMessage): Promise<void> {
     try {
       let message = simplified.message || simplified.body || '';
+
+      // Validate that there's actual content to reply to
+      if (!message || message.trim().length === 0) {
+        return;
+      }
+
       const userId = simplified.user_id || to;
       const pushName = simplified.pushName || 'Kak';
 
       message = message.replace(/@(?:\d+|all)\b/g, '').trimStart();
-      console.log('message', message.trimStart());
+      log.info(`[${this.sessionId}] 💬 Group auto-reply message: "${message.substring(0, 100)}${message.length > 100 ? '...' : ''}"`);
 
       const aiService = await import('../services/aiService.js');
       const { getGroupSystemPrompt } = await import('../services/systemPrompt.js');
@@ -531,6 +702,9 @@ export class BotHandler {
         pushName,
       );
 
+      // Set composing presence
+      await this.socket.sendPresenceUpdate('composing', to).catch(() => {});
+
       let fullResponse = '';
       await aiService.default.chatWithTools(
         userId,
@@ -541,10 +715,18 @@ export class BotHandler {
             fullResponse = chunk.content;
           }
         },
-        toolContext
+        toolContext,
       );
 
-      await this.socket.sendPresenceUpdate('paused', to);
+      await this.socket.sendPresenceUpdate('paused', to).catch(() => {});
+
+      // Safety filter: strip any remaining tool call artifacts
+      const safeResponse = stripToolCallArtifacts(fullResponse);
+
+      if (!safeResponse || safeResponse.trim().length === 0) {
+        log.warn(`[${this.sessionId}] ⚠️ Empty AI response for group auto-reply, skipping`);
+        return;
+      }
 
       const quotedMessageObj = proto.WebMessageInfo.fromObject({
         key: {
@@ -556,31 +738,49 @@ export class BotHandler {
         message: originalMessage.message as proto.IMessage,
       });
 
-      // Safety filter: strip any remaining tool call artifacts
-      const safeResponse = stripToolCallArtifacts(fullResponse);
-
-      if (safeResponse) {
-        await this.socket.sendMessage(to, {
-          text: safeResponse,
-        }, { quoted: quotedMessageObj });
-      }
-    } catch (error: any) {
-      console.error(`[${this.sessionId}] ❌ Group Auto-Reply Error:`, error);
       await this.socket.sendMessage(to, {
-        text: `❌ Maaf, ada masalah: ${'Server sedang sibuk, coba lagi sebentar'}`,
-      });
+        text: safeResponse,
+      }, { quoted: quotedMessageObj });
+    } catch (error: any) {
+      // Differentiate between network errors, AI errors, and unknown errors
+      const errorMessage = error?.message?.toLowerCase() || '';
+      let userFriendlyMessage: string;
+
+      if (errorMessage.includes('timeout') || errorMessage.includes('timedout') || errorMessage.includes('econnrefused')) {
+        userFriendlyMessage = '❌ Layanan AI sedang sibuk. Silakan coba lagi.';
+      } else if (errorMessage.includes('api key') || errorMessage.includes('unauthorized') || errorMessage.includes('401')) {
+        userFriendlyMessage = '❌ Konfigurasi AI salah. Hubungi owner.';
+        log.error(`[${this.sessionId}] ❌ AI Configuration error:`, error as object);
+      } else if (errorMessage.includes('rate limit') || errorMessage.includes('429') || errorMessage.includes('too many')) {
+        userFriendlyMessage = '❌ Terlalu banyak permintaan. Silakan tunggu sebentar.';
+      } else {
+        userFriendlyMessage = '❌ Maaf, ada masalah. Server sedang sibuk, coba lagi sebentar.';
+        log.error(`[${this.sessionId}] ❌ Group Auto-Reply Error:`, error as object);
+      }
+
+      try {
+        await this.socket.sendMessage(to, { text: userFriendlyMessage });
+      } catch {
+        // Best-effort error notification
+      }
     }
   }
 
   private async handleAIMessage(simplified: ReturnType<typeof this.simplified>, message: string, to: string, originalMessage: WAMessage): Promise<void> {
     try {
       const userId = simplified.user_id || to;
+
+      // Validate message content
+      if (!message || message.trim().length === 0) {
+        return;
+      }
+
       const aiService = await import('../services/aiService.js');
       const { getSystemPrompt } = await import('../services/systemPrompt.js');
 
       const systemPrompt = getSystemPrompt();
 
-      await this.socket.sendPresenceUpdate('composing', to);
+      await this.socket.sendPresenceUpdate('composing', to).catch(() => {});
 
       const toolContext = {
         socket: this.socket,
@@ -599,13 +799,18 @@ export class BotHandler {
             fullResponse = chunk.content;
           }
         },
-        toolContext
+        toolContext,
       );
 
-      await this.socket.sendPresenceUpdate('paused', to);
+      await this.socket.sendPresenceUpdate('paused', to).catch(() => {});
 
       // Safety filter: strip any remaining tool call artifacts
       const safeResponse = stripToolCallArtifacts(fullResponse);
+
+      if (!safeResponse || safeResponse.trim().length === 0) {
+        log.warn(`[${this.sessionId}] ⚠️ Empty AI response, skipping`);
+        return;
+      }
 
       const quotedMessageObj = proto.WebMessageInfo.fromObject({
         key: {
@@ -617,35 +822,75 @@ export class BotHandler {
         message: originalMessage.message as proto.IMessage,
       });
 
-      if (safeResponse) {
-        await this.socket.sendMessage(to, {
-          text: safeResponse,
-        }, { quoted: quotedMessageObj });
-      }
-    } catch (error: any) {
-      console.error(`[${this.sessionId}] ❌ AI Error:`, error);
       await this.socket.sendMessage(to, {
-        text: `❌ AI Error: ${error.message}`,
-      });
+        text: safeResponse,
+      }, { quoted: quotedMessageObj });
+    } catch (error: any) {
+      // Differentiate error types for appropriate user feedback
+      const errorMessage = error?.message?.toLowerCase() || '';
+      let userFriendlyMessage: string;
+
+      if (errorMessage.includes('timeout') || errorMessage.includes('timedout') || errorMessage.includes('econnrefused')) {
+        userFriendlyMessage = '❌ Layanan AI sedang sibuk. Silakan coba lagi.';
+      } else if (errorMessage.includes('api key') || errorMessage.includes('unauthorized') || errorMessage.includes('401')) {
+        userFriendlyMessage = '❌ Konfigurasi AI salah. Hubungi owner.';
+        log.error(`[${this.sessionId}] ❌ AI Configuration error:`, error as object);
+      } else if (errorMessage.includes('rate limit') || errorMessage.includes('429') || errorMessage.includes('too many')) {
+        userFriendlyMessage = '❌ Terlalu banyak permintaan. Silakan tunggu sebentar.';
+      } else {
+        userFriendlyMessage = '❌ Terjadi kesalahan AI. Silakan coba lagi.';
+        log.error(`[${this.sessionId}] ❌ AI Error:`, error as object);
+      }
+
+      try {
+        await this.socket.sendMessage(to, { text: userFriendlyMessage });
+      } catch {
+        // Best-effort error notification
+      }
     }
   }
 
   async sendMessage(jid: string, content: any): Promise<void> {
     try {
+      // Validate JID before sending
+      const jidValidation = validateJid(jid);
+      if (!jidValidation.valid) {
+        log.error(`[${this.sessionId}] ❌ Invalid target JID for sendMessage: ${jid}`);
+        return;
+      }
       await this.socket.sendMessage(jid, content);
-    } catch (error) {
-      console.error('Error sending message:', error);
+    } catch (error: any) {
+      const errorMsg = error?.message?.toLowerCase() || '';
+      if (errorMsg.includes('rate-overlimit') || errorMsg.includes('429')) {
+        log.warn(`[${this.sessionId}] ⚠️ Send rate-limited, backing off`);
+      } else if (errorMsg.includes('not-authorized') || errorMsg.includes('403')) {
+        log.warn(`[${this.sessionId}] ⚠️ Not authorized to send to ${jid} (blocked/left group?)`);
+      } else {
+        log.error(`[${this.sessionId}] ❌ Error sending message to ${jid}:`, error as object);
+      }
     }
   }
 
   async replyToMessage(jid: string, quoted: any, content: any): Promise<void> {
     try {
+      const jidValidation = validateJid(jid);
+      if (!jidValidation.valid) {
+        log.error(`[${this.sessionId}] ❌ Invalid target JID for replyToMessage: ${jid}`);
+        return;
+      }
       await this.socket.sendMessage(jid, {
         ...content,
         quoted,
       });
-    } catch (error) {
-      console.error('Error replying to message:', error);
+    } catch (error: any) {
+      const errorMsg = error?.message?.toLowerCase() || '';
+      if (errorMsg.includes('rate-overlimit') || errorMsg.includes('429')) {
+        log.warn(`[${this.sessionId}] ⚠️ Reply rate-limited, backing off`);
+      } else if (errorMsg.includes('not-authorized') || errorMsg.includes('403')) {
+        log.warn(`[${this.sessionId}] ⚠️ Not authorized to reply in ${jid} (blocked/left group?)`);
+      } else {
+        log.error(`[${this.sessionId}] ❌ Error replying to message in ${jid}:`, error as object);
+      }
     }
   }
 }

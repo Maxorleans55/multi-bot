@@ -1,10 +1,16 @@
 import type { AIToolDefinition, ToolExecuteFunction } from '../../types/tools.js';
-import { createPinterestSticker, type PinterestStickerType } from '../../utils/pinterestSticker.js';
+import { createPinterestSticker, createPinterestStickers, type PinterestStickerType } from '../../utils/pinterestSticker.js';
 
 function parseIndex(value: unknown): number {
   const parsed = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(parsed) || parsed < 1) return 1;
   return Math.min(Math.floor(parsed), 50);
+}
+
+function parseCount(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  return Math.min(Math.floor(parsed), 10);
 }
 
 function parseStickerType(value: unknown): PinterestStickerType {
@@ -19,7 +25,7 @@ export const definition: AIToolDefinition = {
   function: {
     name: 'pinterest_sticker',
     description:
-      'Create and send a WhatsApp sticker from a Pinterest URL or a plain search keyword using gallery-dl on Pinterest. Use this when the user asks to make a sticker/stiker from Pinterest or when the user gives a Pinterest URL or a topic/keyword like "kucing".',
+      'Create and send WhatsApp sticker(s) from a Pinterest URL or a plain search keyword using gallery-dl on Pinterest. Use this when the user asks to make a sticker/stiker from Pinterest or when the user gives a Pinterest URL or a topic/keyword like "kucing". Supports making multiple stickers at once using the "count" parameter (e.g. "buat 5 stiker kucing").',
     parameters: {
       type: 'object',
       properties: {
@@ -48,6 +54,10 @@ export const definition: AIToolDefinition = {
           type: 'number',
           description: 'Optional 1-based item number from the Pinterest gallery to use. Default is 1. Maximum is 50.',
         },
+        count: {
+          type: 'number',
+          description: 'Number of stickers to make. Default 1. Maximum 10. Use this when user asks for multiple stickers like "buat 5 stiker".',
+        },
       },
       required: [],
     },
@@ -68,26 +78,70 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     };
   }
 
+  const count = parseCount(args.count);
+  const stickerType = parseStickerType(args.sticker_type);
+  const packName = typeof args.pack === 'string' ? args.pack : undefined;
+  const authorName = typeof args.author === 'string' ? args.author : undefined;
+
   try {
-    const result = await createPinterestSticker({
+    if (count <= 1) {
+      // Single sticker (original behavior)
+      const result = await createPinterestSticker({
+        url: url || undefined,
+        query: query || undefined,
+        packName,
+        authorName,
+        stickerType,
+        index: parseIndex(args.index),
+      });
+
+      await context.socket.sendMessage(context.fromJid, {
+        sticker: result.stickerBuffer,
+      });
+
+      return {
+        success: true,
+        message: 'Sticker dari Pinterest berhasil dibuat dan sudah dikirim ke user.',
+        data: {
+          sourceFileName: result.sourceFileName,
+          downloadedFiles: result.downloadedFiles,
+          count: 1,
+        },
+      };
+    }
+
+    // Multiple stickers (batch)
+    const batchResult = await createPinterestStickers({
       url: url || undefined,
       query: query || undefined,
-      packName: typeof args.pack === 'string' ? args.pack : undefined,
-      authorName: typeof args.author === 'string' ? args.author : undefined,
-      stickerType: parseStickerType(args.sticker_type),
-      index: parseIndex(args.index),
+      packName,
+      authorName,
+      stickerType,
+      count,
+      startIndex: parseIndex(args.index),
     });
 
-    await context.socket.sendMessage(context.fromJid, {
-      sticker: result.stickerBuffer,
-    });
+    // Send each sticker individually
+    let sentCount = 0;
+    for (const stickerResult of batchResult.stickers) {
+      try {
+        await context.socket.sendMessage(context.fromJid, {
+          sticker: stickerResult.stickerBuffer,
+        });
+        sentCount++;
+      } catch (sendError) {
+        console.error('[Tool:pinterest_sticker] Gagal kirim sticker:', sendError);
+      }
+    }
 
     return {
       success: true,
-      message: 'Sticker dari Pinterest berhasil dibuat dan sudah dikirim ke user.',
+      message: `Berhasil membuat ${sentCount} sticker dari Pinterest. Total ${batchResult.totalDownloaded} gambar ditemukan.`,
       data: {
-        sourceFileName: result.sourceFileName,
-        downloadedFiles: result.downloadedFiles,
+        requestedCount: count,
+        sentCount,
+        successCount: batchResult.successCount,
+        totalDownloaded: batchResult.totalDownloaded,
       },
     };
   } catch (error: any) {

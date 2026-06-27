@@ -6,6 +6,7 @@ import type { WASocket } from '@innovatorssoft/baileys';
 import { log } from '../utils/logger.js';
 import type { PluginModule, CommandContext, CommandConfig, CategoryPlugin, CommandModule } from '../types/index.js';
 import { isOwner } from '../config/botConfig.js';
+import { rateLimiter } from '../utils/rateLimiter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,32 +20,61 @@ export class PluginManager {
 
   async loadPlugins(): Promise<void> {
     const pluginsDir = join(__dirname);
-    const entries = await readdir(pluginsDir);
+    let entries: string[];
+
+    try {
+      entries = await readdir(pluginsDir);
+    } catch (error) {
+      log.error(`❌ Failed to read plugins directory:`, error as object);
+      return; // Cannot proceed without plugins directory
+    }
+
+    let loadedPluginCount = 0;
+    let failedPluginCount = 0;
 
     for (const entry of entries) {
       const fullPath = join(pluginsDir, entry);
-      const fileStat = await stat(fullPath);
+      let fileStat;
 
-      // Load legacy plugin files (direct .ts files in plugins dir)
-      if (fileStat.isFile() && (extname(entry) === '.ts' || extname(entry) === '.js') && !entry.endsWith('.d.ts') && entry !== 'types.ts' && entry !== 'types.js' && entry !== 'pluginManager.ts' && entry !== 'pluginManager.js' && entry !== 'basicCommands.ts' && entry !== 'basicCommands.js' && entry !== 'sessionCommands.ts' && entry !== 'sessionCommands.js' && !entry.endsWith('.backup.ts') && !entry.endsWith('.backup.js')) {
-        await this.loadLegacyPlugin(fullPath, entry);
+      try {
+        fileStat = await stat(fullPath);
+      } catch (error) {
+        log.warn(`⚠️ Cannot stat plugin entry "${entry}":`, error as object);
+        failedPluginCount++;
+        continue;
       }
-      // Load category folders (new folder-based structure)
-      else if (fileStat.isDirectory() && !entry.startsWith('.')) {
-        await this.loadCategoryPlugin(fullPath, entry);
+
+      try {
+        // Load legacy plugin files (direct .ts files in plugins dir)
+        if (fileStat.isFile() && (extname(entry) === '.ts' || extname(entry) === '.js') && !entry.endsWith('.d.ts') && entry !== 'types.ts' && entry !== 'types.js' && entry !== 'pluginManager.ts' && entry !== 'pluginManager.js' && entry !== 'basicCommands.ts' && entry !== 'basicCommands.js' && entry !== 'sessionCommands.ts' && entry !== 'sessionCommands.js' && !entry.endsWith('.backup.ts') && !entry.endsWith('.backup.js')) {
+          await this.loadLegacyPlugin(fullPath, entry);
+          loadedPluginCount++;
+        }
+        // Load category folders (new folder-based structure)
+        else if (fileStat.isDirectory() && !entry.startsWith('.')) {
+          await this.loadCategoryPlugin(fullPath, entry);
+          loadedPluginCount++;
+        }
+      } catch (error) {
+        log.error(`❌ Failed to load plugin "${entry}":`, error as object);
+        failedPluginCount++;
       }
     }
 
     // Execute all command onLoad hooks
+    let hooksFailed = 0;
     for (const hook of this.commandOnLoadHooks) {
       try {
         await hook();
       } catch (error) {
         log.error(`❌ Failed to execute command onLoad hook:`, error as object);
+        hooksFailed++;
       }
     }
 
-    log.info(`📦 Loaded ${this.plugins.size} plugin(s) with ${this.commandMap.size} command(s)`);
+    const failedMsg = failedPluginCount > 0 ? ` (${failedPluginCount} failed)` : '';
+    const hooksMsg = hooksFailed > 0 ? `, ${hooksFailed} hook(s) failed` : '';
+    log.info(`📦 Loaded ${this.plugins.size} plugin(s) with ${this.commandMap.size} command(s)${failedMsg}${hooksMsg}`);
   }
 
   private async loadLegacyPlugin(fullPath: string, entry: string): Promise<void> {
@@ -227,109 +257,145 @@ export class PluginManager {
   }
 
   async executeCommand(commandName: string, context: CommandContext, args: string[]): Promise<boolean> {
-    // log.info(`🔍 [PluginManager] Looking for command: "${commandName}"`);
-    // log.info(`📋 [PluginManager] Available commands:`, Array.from(this.commandMap.keys()));
-    // log.info(`🔗 [PluginManager] Available aliases:`, Array.from(this.aliasMap.keys()));
-
-    // Resolve alias
-    const resolvedCommand = this.aliasMap.get(commandName.toLowerCase()) || commandName.toLowerCase();
-    // log.info(`🔄 [PluginManager] Resolved command: "${resolvedCommand}"`);
-
-    const commandData = this.commandMap.get(resolvedCommand);
-
-    if (!commandData) {
-      // log.info(`❌ [PluginManager] Command not found: "${resolvedCommand}"`);
-      return false;
-    }
-
-    // log.info(`✅ [PluginManager] Command found: "${resolvedCommand}" from plugin "${commandData.plugin}"`);
-
-    // Check permissions
-    if (commandData.config.ownerOnly) {
-      const participantJid = context.simplified?.user_id || context.fromJid;
-      const isAuthorizedOwner = context.fromMe || isOwner(participantJid);
-
-      if (!isAuthorizedOwner) {
-        log.info(`🚫 [PluginManager] Permission denied: owner only`);
-        await context.socket.sendMessage(context.fromJid, {
-          text: '❌ This command is owner only',
-        });
-        return true;
-      }
-    }
-    if (commandData.config.adminOnly) {
-      const isGroup = context.fromJid.endsWith('@g.us');
-      const participantJid = context.simplified?.user_id || context.fromJid;
-      const isAdmin = context.fromMe || (isGroup && await this.isGroupAdmin(context, context.fromJid, participantJid));
-
-      if (!isAdmin) {
-        log.info(`🚫 [PluginManager] Permission denied: admin only`);
-        await context.socket.sendMessage(context.fromJid, {
-          text: '❌ This command is admin only',
-        });
-        return true;
-      }
-    }
-
-    if (commandData.config.groupOnly && !context.fromJid.includes('@g.us')) {
-      log.info(`🚫 [PluginManager] Permission denied: group only`);
-      await context.socket.sendMessage(context.fromJid, {
-        text: '❌ This command can only be used in groups',
-      });
-      return true;
-    }
-
-    if (commandData.config.privateOnly && context.fromJid.includes('@g.us')) {
-      log.info(`🚫 [PluginManager] Permission denied: private only`);
-      await context.socket.sendMessage(context.fromJid, {
-        text: '❌ This command can only be used in private chats',
-      });
-      return true;
-    }
-
-    log.info(`✅ [PluginManager] Permissions OK, executing handler`);
     try {
-      await commandData.handler(context, args);
+      // ── Resolve alias ──────────────────────────────────────────────────
+      const resolvedCommand = this.aliasMap.get(commandName.toLowerCase()) || commandName.toLowerCase();
+      const commandData = this.commandMap.get(resolvedCommand);
+
+      if (!commandData) {
+        return false;
+      }
+
+      const participantJid = context.simplified?.user_id || context.fromJid;
+
+      // ── Check permissions ──────────────────────────────────────────────
+      if (commandData.config.ownerOnly) {
+        const isAuthorizedOwner = context.fromMe || isOwner(participantJid);
+        if (!isAuthorizedOwner) {
+          log.info(`🚫 [PluginManager] Permission denied: owner only for "${resolvedCommand}"`);
+          await context.socket.sendMessage(context.fromJid, {
+            text: '❌ This command is owner only',
+          }).catch(() => {});
+          return true;
+        }
+      }
+
+      if (commandData.config.adminOnly) {
+        const isGroup = context.fromJid.endsWith('@g.us');
+        const isAdmin = context.fromMe || (isGroup && await this.isGroupAdmin(context, context.fromJid, participantJid));
+        if (!isAdmin) {
+          log.info(`🚫 [PluginManager] Permission denied: admin only for "${resolvedCommand}"`);
+          await context.socket.sendMessage(context.fromJid, {
+            text: '❌ This command is admin only',
+          }).catch(() => {});
+          return true;
+        }
+      }
+
+      if (commandData.config.groupOnly && !context.fromJid.includes('@g.us')) {
+        log.info(`🚫 [PluginManager] Permission denied: group only for "${resolvedCommand}"`);
+        await context.socket.sendMessage(context.fromJid, {
+          text: '❌ This command can only be used in groups',
+        }).catch(() => {});
+        return true;
+      }
+
+      if (commandData.config.privateOnly && context.fromJid.includes('@g.us')) {
+        log.info(`🚫 [PluginManager] Permission denied: private only for "${resolvedCommand}"`);
+        await context.socket.sendMessage(context.fromJid, {
+          text: '❌ This command can only be used in private chats',
+        }).catch(() => {});
+        return true;
+      }
+
+      // ── Execute handler ────────────────────────────────────────────────
+      log.info(`✅ [PluginManager] Permissions OK, executing "${resolvedCommand}" handler`);
+
+      // Execute with a safety net for handler errors
+      try {
+        await commandData.handler(context, args);
+      } catch (handlerError) {
+        // Propagate handler errors to the outer catch for unified handling
+        throw handlerError;
+      }
+
       log.info(`✅ [PluginManager] Command "${resolvedCommand}" executed successfully`);
       return true;
-    } catch (error) {
-      log.error(`❌ [PluginManager] Error executing command ${commandName}:`, error as object);
-      await context.socket.sendMessage(context.fromJid, {
-        text: '❌ An error occurred while executing this command',
-      });
+    } catch (error: any) {
+      // ── Unified error handling with error type detection ───────────────
+      const errorMsg = error?.message?.toLowerCase() || '';
+      let userMessage = '❌ An error occurred while executing this command';
+
+      if (errorMsg.includes('timeout') || errorMsg.includes('timedout')) {
+        userMessage = '❌ Command timed out. Please try again.';
+      } else if (errorMsg.includes('rate-overlimit') || errorMsg.includes('429') || errorMsg.includes('too many')) {
+        userMessage = '❌ Too many requests. Please wait a moment.';
+      } else if (errorMsg.includes('not-authorized') || errorMsg.includes('403')) {
+        userMessage = '❌ Bot is not authorized to perform this action.';
+      } else if (errorMsg.includes('connection') || errorMsg.includes('econnrefused') || errorMsg.includes('econnreset')) {
+        userMessage = '❌ Connection error. Please try again.';
+      } else if (errorMsg.includes('validation') || errorMsg.includes('invalid')) {
+        userMessage = '❌ Invalid command usage. Check syntax and try again.';
+      }
+
+      log.error(`❌ [PluginManager] Error executing command "${commandName}":`, error as object);
+
+      // Notify user (best-effort)
+      try {
+        await context.socket.sendMessage(context.fromJid, { text: userMessage });
+      } catch {
+        // Last-resort: swallow send failure
+      }
+
+      // Return true (we handled it, the caller shouldn't show "command not found")
       return true;
     }
   }
 
   public getCommand(name: string): { config: CommandConfig; plugin: string } | undefined {
-    const resolvedCommand = this.aliasMap.get(name.toLowerCase()) || name.toLowerCase();
-    const commandData = this.commandMap.get(resolvedCommand);
+    try {
+      const resolvedCommand = this.aliasMap.get(name.toLowerCase()) || name.toLowerCase();
+      const commandData = this.commandMap.get(resolvedCommand);
 
-    if (commandData) {
-      return {
-        config: commandData.config,
-        plugin: commandData.plugin,
-      };
+      if (commandData) {
+        return {
+          config: commandData.config,
+          plugin: commandData.plugin,
+        };
+      }
+
+      return undefined;
+    } catch (error) {
+      log.error(`❌ [PluginManager] Error in getCommand("${name}"):`, error as object);
+      return undefined;
     }
-
-    return undefined;
   }
 
   public getAllCommands(): Array<{ config: CommandConfig; plugin: string }> {
-    const commands: Array<{ config: CommandConfig; plugin: string }> = [];
+    try {
+      const commands: Array<{ config: CommandConfig; plugin: string }> = [];
 
-    for (const [name, data] of this.commandMap) {
-      commands.push({
-        config: data.config,
-        plugin: data.plugin,
-      });
+      for (const [name, data] of this.commandMap) {
+        commands.push({
+          config: data.config,
+          plugin: data.plugin,
+        });
+      }
+
+      return commands;
+    } catch (error) {
+      log.error(`❌ [PluginManager] Error in getAllCommands:`, error as object);
+      return [];
     }
-
-    return commands;
   }
 
   public getPlugins(): (PluginModule | CategoryPlugin)[] {
-    return Array.from(this.plugins.values());
+    try {
+      return Array.from(this.plugins.values());
+    } catch (error) {
+      log.error(`❌ [PluginManager] Error in getPlugins:`, error as object);
+      return [];
+    }
   }
 
   private isValidPlugin(plugin: any): plugin is PluginModule {
