@@ -1,7 +1,7 @@
 # Bot-Baileys-AI — TODO.md
 
 > Task list dan development roadmap.
-> **Versi:** 1.0.0 | **Last Updated:** 22 Juni 2026
+> **Versi:** 1.1.0 | **Last Updated:** 25 Juni 2026
 
 ---
 
@@ -27,16 +27,22 @@
 - [ ] **Custom System Prompt per User** — User bisa set system prompt sendiri
 - [ ] **AI Personality Presets** — Multiple personality templates
 - [x] **Web Search Integration** — Firecrawl search + fetch via function calling
-- [x] **Web Fetch Tool** — Firecrawl headless scraper (ganti axios+cheerio)
+- [x] **Web Fetch Tool** — Firecrawl headless scraper
 - [x] **System Prompt Refactor** — Extract ke file terpisah, dynamic date injection
 - [x] **AI Date/Time Awareness** — Inject real-time date ke prompt, anti-year-bias
 - [x] **Group Prompt Enhancement** — Tool instructions lengkap di group auto-reply
+- [x] **AI Function Calling System** — 6 AI tools with ToolRegistry singleton
+- [x] **DSML Tool Call Recovery** — Parse DSML/XML artifacts dari model tanpa native function calling
+- [x] **Tool Call Artifact Filter** — Strip residual XML/JSON/tool artifacts dari respons AI
+- [x] **'other' AI Provider Support** — Custom OpenAI-compatible API provider
 - [ ] **Conversation Export** — Export riwayat chat AI
 
 ### Media Download
-- [ ] **YouTube Auto-Download** — Implementasi full YouTube download (saat ini partial)
+- [ ] **YouTube Auto-Download** — Full YouTube download (saat ini partial)
 - [ ] **YouTube Playlist Support** — Download playlist YouTube
 - [ ] **Twitter/X Thread Download** — Download entire thread
+- [x] **Twitter/X Download via yt-dlp** — Implementasi dedicated twitter downloader
+- [x] **gallery-dl Sticker Maker** — Buat stiker dari URL atau keyword pencarian
 - [ ] **Multi-Platform Downloader** — Tambah support platform lain (Reddit, Pinterest direct)
 - [ ] **Media Queue System** — Antrian download untuk menghindari rate limit
 - [ ] **Compression Options** — Opsi kompresi untuk video besar
@@ -97,11 +103,12 @@
 ### Advanced AI
 - [ ] **RAG (Retrieval-Augmented Generation)** — Chat dengan dokumen/knowledge base
 - [ ] **Multi-Modal AI** — Process images, audio, video
-- [ ] **AI Agent Tools** — Function calling untuk actions (cek cuaca, jadwal, dll)
+- [x] **AI Agent Tools** — Function calling untuk actions (6 tools: download_social_media, download_youtube, pinterest_search, gallery_dl_sticker, web_fetch, web_search)
 - [ ] **Context-Aware Conversations** — Remember user context across sessions
 - [ ] **AI Training/Finetuning** — Custom model fine-tuning
+- [ ] **More AI Tools** — Weather, calendar, calculators, etc.
 
-## 🔄 Recent Changes (22 Juni 2026)
+## 🔄 Recent Changes (25 Juni 2026)
 
 | Perubahan | Files | Status |
 |-----------|-------|--------|
@@ -109,19 +116,27 @@
 | **Firecrawl Web Search** — Ganti SearXNG dengan Firecrawl search endpoint | [`src/tools/definitions/webSearch.ts`](src/tools/definitions/webSearch.ts) | ✅ Done |
 | **System Prompt Refactor** — Extract ke `systemPrompt.ts`, dynamic date injection, anti-year-bias | [`src/services/systemPrompt.ts`](src/services/systemPrompt.ts), [`src/services/aiModeHandler.ts`](src/services/aiModeHandler.ts), [`src/bot/botHandler.ts`](src/bot/botHandler.ts) | ✅ Done |
 | **Group Prompt Enhancement** — Tool instructions lengkap, web search rules, downloader capability | [`src/services/systemPrompt.ts`](src/services/systemPrompt.ts) | ✅ Done |
-| **Env Cleanup** — Hapus `SEARXNG_URL`, tambah `FIRECRAWL_URL` | [`.env`](.env), [`.env.example`](.env.example) | ✅ Done |
+| **AI Function Calling System** — ToolRegistry singleton, 6 tools, multi-round execution (max 4) | [`src/tools/`](src/tools/), [`src/types/tools.ts`](src/types/tools.ts) | ✅ Done |
+| **DSML Tool Call Recovery** — Parse DSML/XML artifacts dari model AI | [`src/utils/toolCallFilter.ts`](src/utils/toolCallFilter.ts) | ✅ Done |
+| **Tool Call Artifact Filter** — Strip residual artifacts dari respons AI | [`src/utils/toolCallFilter.ts`](src/utils/toolCallFilter.ts) | ✅ Done |
+| **gallery-dl Sticker Tool** — Buat stiker dari URL atau keyword via gallery-dl | [`src/utils/galleryDlSticker.ts`](src/utils/galleryDlSticker.ts), [`src/tools/definitions/galleryDlSticker.ts`](src/tools/definitions/galleryDlSticker.ts), [`src/plugins/media/galleryDlSticker.ts`](src/plugins/media/galleryDlSticker.ts) | ✅ Done |
+| **Twitter/X Download** — Dedicated downloader via yt-dlp | [`src/utils/twitterDownloader.ts`](src/utils/twitterDownloader.ts) | ✅ Done |
+| **'other' AI Provider** — Dukungan custom OpenAI-compatible API | [`src/services/aiService.ts`](src/services/aiService.ts), [`.env.example`](.env.example) | ✅ Done |
+| **Env Cleanup** — Hapus `SEARXNG_URL`, tambah `FIRECRAWL_URL`, `GALLERY_DL_*`, `OTHER_*` | [`.env.example`](.env.example) | ✅ Done |
 
-##  Known Issues
+## Known Issues
 
 | Issue | Status | Priority | Notes |
 |-------|--------|----------|-------|
 | YouTube auto-download tidak fully implemented | 🟡 Open | Medium | Hanya fallback ke command manual |
+| gallery-dl binary harus diinstall manual | 🟡 Open | Medium | Perlu dokumentasi instalasi |
 | Message saving ke DB di-comment out | 🟡 Open | Low | Perlu diaktifkan jika diperlukan |
 | Some type safety issues dengan Baileys types | 🟡 Open | Medium | Perlu deklarasi tipe yang lebih ketat |
 | Tidak ada rate limiting | 🟡 Open | High | Bisa menyebabkan spam |
 | Plugin hot reload belum support | 🟡 Open | Low | Butuh restart untuk reload plugin |
 | Group metadata cache TTL 5 menit | 🟡 Open | Low | Konfigurasikan sesuai kebutuhan |
 | AI model bias tambah tahun ke query search | 🟢 Resolved | Medium | Diatasi dgn instruksi eksplisit di system prompt + dynamic year injection |
+| Tool call artifacts muncul di response | 🟢 Resolved | Medium | Diatasi dgn stripToolCallArtifacts() filter |
 
 ## 📈 Performance Goals
 

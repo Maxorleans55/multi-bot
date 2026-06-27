@@ -16,6 +16,11 @@ import {
 } from './pinterestSearch.js';
 
 import {
+  definition as pinterestStickerDef,
+  execute as executePinterestSticker,
+} from './pinterestSticker.js';
+
+import {
   definition as webFetchDef,
   execute as executeWebFetch,
 } from './webFetch.js';
@@ -28,6 +33,7 @@ import {
 export const downloadSocialMedia = downloadSocialDef;
 export const downloadYoutube = downloadYoutubeDef;
 export const pinterestSearch = pinterestSearchDef;
+export const pinterestSticker = pinterestStickerDef;
 export const webFetch = webFetchDef;
 export const webSearch = webSearchDef;
 
@@ -35,6 +41,7 @@ export {
   executeDownloadSocial,
   executeDownloadYoutube,
   executePinterestSearch,
+  executePinterestSticker,
   executeWebFetch,
   executeWebSearch,
 };
@@ -61,6 +68,11 @@ export const allTools: Array<{
     name: 'pinterest_search',
     definition: pinterestSearchDef,
     execute: executePinterestSearch,
+  },
+  {
+    name: 'pinterest_sticker',
+    definition: pinterestStickerDef,
+    execute: executePinterestSticker,
   },
   {
     name: 'web_fetch',

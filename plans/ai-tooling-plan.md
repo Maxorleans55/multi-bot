@@ -1,13 +1,22 @@
-# AI Tooling System - Implementation Plan
+# AI Tooling System — Implementation Status
 
-## 1. Problem Statement
+> **Status:** ✅ Fully Implemented (v1.1.0)  
+> **This document** was originally created as an implementation plan. It has been updated to reflect the current state of the implementation.
 
-Currently, the bot uses **regex-based link detection** to trigger social media downloads. The AI cannot proactively decide to use tools — it only reacts when a link is detected. The user wants **proper AI function calling (tool use)** where:
+---
 
-- The AI **intelligently decides** when to call a download tool
-- The user can say: *"Download this Instagram video for me"* (without even pasting a link first, the AI can ask for it)
-- The system is **extensible** for future tools (web search, image generation, etc.)
-- Works across **all AI providers** (OpenAI, OpenRouter, Ollama)
+## 1. What Was Built
+
+The AI can now **intelligently decide** when to call tools via OpenAI-compatible function calling, including:
+
+- **Download social media** (Instagram, TikTok, Facebook, Twitter/X)
+- **Download YouTube** (video & audio)
+- **Search Pinterest** (images)
+- **Create gallery-dl stickers** (from URL or search keywords)
+- **Fetch web pages** (via Firecrawl headless scraper)
+- **Search the web** (via Firecrawl search API)
+
+Works across all AI providers (OpenAI, OpenRouter, Ollama, and any OpenAI-compatible "other" provider).
 
 ---
 
@@ -16,338 +25,98 @@ Currently, the bot uses **regex-based link detection** to trigger social media d
 ```
 User Message
     │
-    ├──► [aiCommand.ts] ──► detectSocialMediaLink() ──► downloadFromSocialMedia()
-    │       (regex only)           (regex match)           (send media)
-    │
-    └──► [aiService.ts] ──► No tool_calls processed
-            (chat/stream)        (tools ignored)
-```
-
-**Key Gaps:**
-- `aiService.ts` sends `tools` array but **never processes `tool_calls`** from AI response
-- Streaming handler only reads `delta.content`, ignores `delta.tool_calls`
-- No centralized tool registry
-- No multi-turn function calling flow
-
----
-
-## 3. Proposed Architecture
-
-```
-User Message
-    │
     ├──► [aiCommand.ts / botHandler.ts]
     │         │
     │         ▼
-    │   ┌─────────────────────┐
-    │   │   aiService.ts      │
-    │   │   (with function     │
-    │   │    calling support)  │
-    │   └──────┬──────────────┘
+    │   ┌─────────────────────────┐
+    │   │   aiService.ts          │
+    │   │   chatWithTools()       │
+    │   │   (multi-round, max 4)   │
+    │   └──────┬──────────────────┘
     │          │
     │          ▼
-    │   ┌─────────────────────┐
-    │   │   Tool Registry     │
-    │   │   (src/tools/)      │
-    │   └──────┬──────────────┘
+    │   ┌─────────────────────────┐
+    │   │   ToolRegistry          │
+    │   │   (src/tools/)          │
+    │   │   singleton             │
+    │   └──────┬──────────────────┘
     │          │
-    │          ├── download_instagram(url)
-    │          ├── download_tiktok(url)
-    │          ├── download_facebook(url)
-    │          ├── download_twitter(url)
+    │          ├── download_social_media(url)     ← unified IG/TikTok/FB/Twitter
     │          ├── download_youtube(url, format)
-    │          └── pinterest_search(query)
+    │          ├── pinterest_search(query)
+    │          ├── gallery_dl_sticker(url|query)   ← sticker creation
+    │          ├── web_fetch(url)                  ← Firecrawl scrape
+    │          └── web_search(query)               ← Firecrawl search
     │
-    │   AI: "call tool download_instagram"
+    │   AI: "call tool download_social_media"
     │        │
     │        ▼
-    │   Execute tool → send media
+    │   Execute tool → send media directly
     │        │
     │        ▼
     │   Return result to AI
     │        │
     │        ▼
     │   AI: "Here's your video!"
+    │
+    │   [DSML Fallback] → If model emits tool calls
+    │   as visible XML text instead of native API,
+    │   parseDsmlToolCalls() recovers them.
 ```
+
+**Key Gaps Closed:**
+- ✅ `aiService.ts` now processes `tool_calls` from AI responses
+- ✅ Streaming handler accumulates `delta.tool_calls` and processes after stream ends
+- ✅ Centralized ToolRegistry singleton
+- ✅ Multi-turn function calling flow (max 4 rounds)
+- ✅ DSML/XML artifact recovery for models that don't support native function calling
+- ✅ Tool call artifact stripping from final response
 
 ---
 
-## 4. Detailed Implementation Steps
-
-### Step 1: Create Tool Type Definitions (`src/types/tools.ts`)
-
-Define TypeScript interfaces for the tooling system:
-
-```typescript
-interface AIToolParameter {
-  name: string;
-  type: string;
-  description: string;
-  required?: boolean;
-}
-
-interface AIToolDefinition {
-  name: string;
-  description: string;
-  parameters: {
-    type: 'object';
-    properties: Record<string, {
-      type: string;
-      description: string;
-    }>;
-    required: string[];
-  };
-}
-
-interface AIToolCall {
-  id: string;
-  type: 'function';
-  function: {
-    name: string;
-    arguments: string; // JSON string
-  };
-}
-
-interface AIToolResult {
-  tool_call_id: string;
-  role: 'tool';
-  content: string;
-}
-
-type ToolExecuteFunction = (args: Record<string, any>, context: ToolContext) => Promise<ToolExecuteResult>;
-
-interface ToolContext {
-  socket?: WASocket;
-  fromJid?: string;
-  sessionId?: string;
-}
-
-interface ToolExecuteResult {
-  success: boolean;
-  message: string;
-  data?: any;  // Additional structured data
-}
-```
-
-### Step 2: Create Tool Registry (`src/tools/toolRegistry.ts`)
-
-Central registry to manage all AI-accessible tools.
-
-**Responsibilities:**
-- Register tools with name, description, parameter schema, and execute function
-- Look up tools by name
-- Get all tool definitions for AI API calls
-- Execute a tool call and return formatted results
-
-### Step 3: Define Media Download Tools (`src/tools/definitions/`)
-
-Each tool definition file exports both the schema and the execute function.
-
-**Tools to implement:**
-
-| Tool Name | Description | Source Reused |
-|-----------|-------------|---------------|
-| `download_instagram` | Download Instagram video/photo | `autoDownload.ts:downloadInstagram` |
-| `download_tiktok` | Download TikTok video | `autoDownload.ts:downloadTikTok` |
-| `download_facebook` | Download Facebook video | `autoDownload.ts:downloadFacebook` |
-| `download_twitter` | Download Twitter/X video | `autoDownload.ts:downloadTwitter` |
-| `download_youtube` | Download YouTube video/audio | `autoDownload.ts:downloadYouTube` |
-| `pinterest_search` | Search and download Pinterest images | `utils/pinterest.ts` |
-
-**Example tool definition:**
-
-```typescript
-// src/tools/definitions/downloadInstagram.ts
-export const definition: AIToolDefinition = {
-  name: 'download_instagram',
-  description: 'Download media (photo or video) from Instagram. Requires a valid Instagram post/reel URL.',
-  parameters: {
-    type: 'object',
-    properties: {
-      url: {
-        type: 'string',
-        description: 'The Instagram URL (post, reel, or IGTV)'
-      }
-    },
-    required: ['url']
-  }
-};
-
-export async function execute(args: { url: string }, context: ToolContext): Promise<ToolExecuteResult> {
-  // Reuse existing logic from autoDownload.ts
-  // But return structured result instead of sending directly
-}
-```
-
-### Step 4: Update `aiService.ts` with Function Calling Support
-
-**Major changes needed:**
-
-#### 4a. Add tool registration to AIService
-
-```typescript
-private tools: Map<string, AIToolDefinition> = new Map();
-
-registerTool(tool: AIToolDefinition): void { ... }
-getToolsForApi(): AIToolDefinition[] { ... }
-```
-
-#### 4b. Update `callOpenAICompatibleStream()` to include all registered tools
-
-Currently only sends tools for OpenRouter. Change to send for all providers.
-
-#### 4c. Create new method `chatWithTools()`
-
-```typescript
-async chatWithTools(
-  sessionId: string,
-  userMessage: string,
-  systemPrompt?: string,
-  onChunk?: StreamCallback,
-  toolContext?: ToolContext
-): Promise<string>
-```
-
-This method:
-1. Sends the message with tool definitions
-2. If AI response contains `tool_calls`:
-   - Parse the tool calls
-   - Execute each tool via ToolRegistry
-   - Send tool results back to AI
-   - Return AI's final response
-3. If AI response is normal text, return directly
-
-#### 4d. Handle streaming with tool calls
-
-The SSE stream may contain:
-- `delta.content` - normal text
-- `delta.tool_calls` - function call requests
-
-Need to buffer tool_calls from the stream, then after stream ends, process them.
-
-**Streaming flow:**
-
-```
-Stream Chunks
-  │
-  ├── delta.content → buffer as normal response text
-  │
-  └── delta.tool_calls → accumulate in toolCalls array
-
-[Stream ends]
-  │
-  ├── if toolCalls found:
-  │      execute tools → send results back to AI
-  │      → get new completion (non-stream or stream)
-  │      → return final text
-  │
-  └── if no toolCalls:
-         return buffered content as final response
-```
-
-### Step 5: Create Tool Execution Engine (`src/tools/toolExecutor.ts`)
-
-Handles the actual execution of tool calls:
-
-```typescript
-class ToolExecutor {
-  async executeToolCall(
-    toolCall: AIToolCall,
-    context: ToolContext
-  ): Promise<AIToolResult> {
-    // 1. Find tool in registry
-    // 2. Parse arguments JSON
-    // 3. Execute tool function
-    // 4. If socket context available, send media directly to user
-    // 5. Return formatted result for AI
-  }
-
-  async handleToolCalls(
-    toolCalls: AIToolCall[],
-    context: ToolContext
-  ): Promise<AIToolResult[]> {
-    // Execute all tool calls (parallel where possible)
-  }
-}
-```
-
-### Step 6: Update `aiCommand.ts`
-
-Replace the current reactive approach:
-```typescript
-// OLD: reactive regex detection
-const socialLink = detectSocialMediaLink(question);
-if (socialLink) {
-  await downloadFromSocialMedia(socialLink, ...);
-  return;
-}
-
-// NEW: proactive tool calling
-const response = await aiService.chatWithTools(
-  userId, question, systemPrompt, callback, toolContext
-);
-// AI decides when to call download tools
-```
-
-### Step 7: Update `botHandler.ts`
-
-Update the AI message handlers (`handleAIMessage`, `handleGroupAutoReply`) to use `chatWithTools` instead of `chatStream`.
-
-Keep the regex auto-download as a fallback for non-AI mode messages.
-
-### Step 8: Update System Prompt
-
-Add tool awareness to the system prompt in `aiCommand.ts`:
-
-```
-Kemampuan Tools:
-- download_instagram(url): Download video/foto dari Instagram
-- download_tiktok(url): Download video dari TikTok
-- download_facebook(url): Download video dari Facebook
-- download_twitter(url): Download video dari Twitter/X
-- download_youtube(url, format): Download video/audio dari YouTube
-- pinterest_search(query): Cari gambar dari Pinterest
-
-Gunakan tools ini saat user meminta download media sosial.
-```
-
----
-
-## 5. File Structure
+## 3. File Structure (Current)
 
 ```
 src/
-├── tools/                           # NEW: AI Tooling System
-│   ├── index.ts                     # Re-export all tools
-│   ├── toolRegistry.ts              # Central tool registry
-│   ├── toolExecutor.ts              # Executes tool calls from AI
-│   ├── toolContext.ts               # Context builder helper
-│   └── definitions/                 # Tool definitions
-│       ├── downloadInstagram.ts
-│       ├── downloadTiktok.ts
-│       ├── downloadFacebook.ts
-│       ├── downloadTwitter.ts
-│       ├── downloadYoutube.ts
-│       ├── pinterestSearch.ts
-│       └── index.ts                 # Re-export all definitions
+├── tools/                           # AI Tooling System
+│   ├── index.ts                     # registerAllTools() barrel
+│   ├── toolRegistry.ts              # Central tool registry singleton
+│   └── definitions/
+│       ├── index.ts                 # Registers all 6 tools
+│       ├── socialDownload.ts        # Unified: IG, TikTok, FB, Twitter
+│       ├── downloadYoutube.ts       # YouTube downloader
+│       ├── pinterestSearch.ts       # Pinterest image search
+│       ├── galleryDlSticker.ts      # gallery-dl sticker creation
+│       ├── webFetch.ts              # Firecrawl web scraper
+│       └── webSearch.ts             # Firecrawl web search
 │
 ├── services/
-│   ├── aiService.ts                 # UPDATED: Add function calling
-│   └── aiModeHandler.ts             # UPDATED: Use new tooling
+│   ├── aiService.ts                 # chatWithTools(), tool call handling
+│   ├── systemPrompt.ts              # Extracted system prompts, dynamic date
+│   ├── aiModeHandler.ts             # AI mode toggle
+│   └── groupToggle.ts               # Group AI toggle
 │
 ├── plugins/ai/
-│   └── aiCommand.ts                 # UPDATED: Use chatWithTools
+│   └── aiCommand.ts                 # Uses chatWithTools()
 │
 ├── bot/
-│   └── botHandler.ts                # UPDATED: Use chatWithTools
+│   └── botHandler.ts                # Uses chatWithTools() for group/private
 │
-└── types/
-    └── tools.ts                     # NEW: Type definitions for tooling
+├── types/
+│   └── tools.ts                     # AIToolDefinition, ToolContext, etc.
+│
+└── utils/
+    ├── toolCallFilter.ts            # DSML parsing, artifact detection/stripping
+    ├── twitterDownloader.ts         # yt-dlp based Twitter/X download
+    ├── galleryDlSticker.ts          # gallery-dl process + sticker creation
+    ├── pinterest.ts                 # Pinterest scraper (cheerio)
+    ├── logger.ts                    # Logging utility
+    └── youtubeButtonHandler.ts      # YouTube interactive button handler
 ```
 
 ---
 
-## 6. Mermaid Diagram: Function Calling Flow
+## 4. Mermaid Diagram: Function Calling Flow
 
 ```mermaid
 sequenceDiagram
@@ -355,7 +124,7 @@ sequenceDiagram
     participant Bot as botHandler.ts
     participant AI as aiService.ts
     participant Registry as ToolRegistry
-    participant Tool as Tool Executor
+    participant Tool as Tool Function
     participant API as AI Provider API
 
     User->>Bot: Tolong download video IG ini ya
@@ -363,15 +132,13 @@ sequenceDiagram
     Bot->>AI: chatWithTools(message, tools[])
     AI->>API: POST /chat/completions<br/>messages=[...]<br/>tools=[...]
     
-    Note over API: AI decides to call<br/>download_instagram tool
+    Note over API: AI decides to call<br/>download_social_media tool
     
-    API-->>AI: delta.tool_calls<br/>[{name: download_instagram,<br/>  args: {url: "..."}}]
+    API-->>AI: delta.tool_calls<br/>[{name: download_social_media,<br/>  args: {url: "..."}}]
     
-    AI->>Registry: getTool(download_instagram)
-    Registry-->>AI: tool definition + execute function
-    
-    AI->>Tool: execute({url: "..."}, {socket, fromJid})
-    Tool->>Tool: Download media from Instagram
+    AI->>Registry: executeToolCall(toolCall)
+    Registry->>Tool: execute({url: "..."}, {socket, fromJid})
+    Tool->>Tool: Download media
     Tool->>Bot: sendMessage(video/photo)
     Tool-->>AI: {success: true, message: "Video downloaded!"}
     
@@ -381,57 +148,70 @@ sequenceDiagram
     
     AI-->>Bot: "Udah selesai! Ini videonya ✅"
     Bot->>User: Udah selesai! Ini videonya ✅
+
+    Note over AI,API: If model emits DSML/XML artifacts instead of<br/>native tool_calls, parseDsmlToolCalls()<br/>recovery layer extracts them
 ```
 
 ---
 
-## 7. OpenAI-Compatible Tool Format
+## 5. Implementation Details
 
-The tools must follow OpenAI's function calling format:
+### Tool Registry (`src/tools/toolRegistry.ts`)
 
-```json
-{
-  "type": "function",
-  "function": {
-    "name": "download_instagram",
-    "description": "Download media from Instagram (photo or video)",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "description": "Full Instagram URL (post, reel, or IGTV)"
-        }
-      },
-      "required": ["url"]
-    }
-  }
-}
+Singleton pattern with these public methods:
+- `register()` / `registerAll()` — Register tools
+- `getApiDefinitions()` — Get OpenAI-compatible tool definitions array
+- `executeToolCall()` — Execute a single tool call
+- `executeToolCalls()` — Execute multiple tool calls
+
+### aiService.ts — chatWithTools()
+
+Core multi-round execution loop:
+1. Send messages + tools to AI API
+2. Check response for `tool_calls` (native) or DSML artifacts (recovery)
+3. If tool calls found → execute via ToolRegistry → append results → go to step 1
+4. If no tool calls → return final text
+5. Max 4 rounds (`MAX_TOOL_ROUNDS`)
+
+### DSML Tool Call Parsing
+
+DSML (Directive System Markup Language) is a recovery mechanism for models that emit tool calls as visible text:
+
+```
+<鄽 download_social_media>
+鄽鄽url: "https://instagram.com/p/xyz"
+</鄽 download_social_media>
 ```
 
----
+`parseDsmlToolCalls()` extracts these using a whitelist of allowed tool names, preventing prompt injection.
 
-## 8. Implementation Order
+### Tool Call Artifact Filter
 
-1. **`src/types/tools.ts`** - Type definitions first (no dependencies)
-2. **`src/tools/toolRegistry.ts`** - Registry system
-3. **`src/tools/definitions/*`** - Individual tool definitions (can be parallel)
-4. **`src/tools/toolExecutor.ts`** - Execution engine
-5. **`src/tools/index.ts`** - Barrel export
-6. **Update `src/services/aiService.ts`** - Core function calling support
-7. **Update `src/plugins/ai/aiCommand.ts`** - Integration point 1
-8. **Update `src/bot/botHandler.ts`** - Integration point 2
-9. **Update `src/services/aiModeHandler.ts`** - Integration point 3
+`stripToolCallArtifacts()` removes residual XML/JSON/tool artifacts from the final AI response text before sending to the user.
 
 ---
 
-## 9. Key Design Decisions
+## 6. Key Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Tool definitions separate from execution | Yes | Clean separation of concerns, easier to add new tools |
-| Reuse existing download functions | Yes | Avoid code duplication, wrap in tool interface |
-| Send tools to all providers | Yes | OpenAI, OpenRouter, and "other" OpenAI-compatible all support function calling |
-| Ollama support | Limited | Ollama may not support function calling; fall back to regex-based detection |
+| Tool definitions separate from execution | ✅ | Clean separation of concerns, easier to add new tools |
+| Reuse existing download functions | ✅ | Avoid code duplication, wrap in tool interface |
+| Send tools to all providers | ✅ | OpenAI/OpenRouter/Ollama/'other' all supported |
+| Unified social download (1 tool) | ✅ | 4 separate tools → 1 single `download_social_media` with auto-detect |
 | Streaming with tool calls | Accumulate then process | Simplifies implementation; tool calls are fast anyway |
 | Send media directly vs via AI | Direct send | WhatsApp media must be sent via socket, not through AI text |
+| DSML artifact recovery | ✅ | Essential for models that don't emit native tool_calls |
+| Max 4 tool rounds | ✅ | Prevents infinite loops while allowing multi-step tasks |
+| Tool call artifact stripping | ✅ | Ensures clean responses even if model includes artifacts |
+
+---
+
+## 7. Future Enhancements
+
+| Feature | Priority | Notes |
+|---------|----------|-------|
+| More tools (weather, calendar, etc.) | Medium | Easy to add via new definition files |
+| Tool call caching/rate limiting | Low | Prevent duplicate/redundant calls |
+| Better error recovery per tool | Medium | Some tools fail silently, need better feedback |
+| Tool execution timeout per tool | Low | Currently uses global timeout |

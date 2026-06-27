@@ -44,11 +44,17 @@ WORKDIR /app
 # Install only runtime dependencies (no build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
+    python3-venv \
     libvips \
     openssl \
     ffmpeg \
     tini \
     && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/gallery-dl \
+    && /opt/gallery-dl/bin/pip install --no-cache-dir --upgrade pip gallery-dl
+
+ENV PATH="/opt/gallery-dl/bin:${PATH}"
 
 # Copy the compiled build output and production node_modules
 COPY --from=builder /app/dist ./dist

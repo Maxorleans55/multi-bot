@@ -1,6 +1,6 @@
 # Bot-Baileys-AI — Dokumentasi Arsitektur Sistem
 
-> **Versi:** 1.0.0  
+> **Versi:** 1.1.0  
 > **Deskripsi:** Multi-session WhatsApp bot menggunakan Baileys, Prisma, dan MongoDB  
 > **Bahasa:** TypeScript (ESM)
 
@@ -19,7 +19,8 @@
    - [4.5 Service Layer](#45-service-layer)
    - [4.6 Database Layer](#46-database-layer)
    - [4.7 Configuration Layer](#47-configuration-layer)
-   - [4.8 Utility Layer](#48-utility-layer)
+   - [4.8 Tool System](#48-tool-system)
+   - [4.9 Utility Layer](#49-utility-layer)
 5. [Alur Pesan](#5-alur-pesan)
 6. [Sistem Plugin](#6-sistem-plugin)
 7. [Multi-Session & Reconnect](#7-multi-session--reconnect)
@@ -37,12 +38,14 @@ Bot ini adalah **WhatsApp bot multi-session** yang memungkinkan:
 - Menjalankan **banyak nomor WhatsApp** dalam satu instance Node.js
 - Setiap session memiliki koneksi WebSocket sendiri ke WhatsApp
 - **Plugin architecture** yang memisahkan command berdasarkan kategori
-- **AI Chat** dengan dukungan multi-provider (OpenAI, OpenRouter, Ollama)
+- **AI Chat** dengan dukungan multi-provider (OpenAI, OpenRouter, Ollama, Other)
+- **AI function calling** — 6 tools untuk download media, search, fetch
 - **Auto-download** media sosial (TikTok, Instagram, Facebook, Twitter/X, YouTube)
 - **Group management** dan fitur group AI
 - **Persistent auth state** di MongoDB via Prisma
+- **gallery-dl sticker maker** — buat stiker dari URL atau keyword pencarian
 
-**Arsitektur mengikuti pola分层** yang terdiri dari:
+**Arsitektur mengikuti pola berlapis** yang terdiri dari:
 
 ```mermaid
 flowchart TD
@@ -53,11 +56,12 @@ flowchart TD
     E --> F[PluginManager<br/>src/plugins/pluginManager.ts]
     F --> G[Plugin Commands]
     E --> H[AIService<br/>src/services/aiService.ts]
-    E --> I[AutoDownload<br/>src/bot/autoDownload.ts]
-    C --> J[usePrismaAuthState<br/>src/libs/baileys/]
-    J --> K[Prisma + MongoDB]
-    H --> K
-    G --> K
+    H --> I[ToolRegistry<br/>src/tools/toolRegistry.ts]
+    I --> J[6 Tool Definitions<br/>src/tools/definitions/]
+    C --> K[usePrismaAuthState<br/>src/libs/baileys/]
+    K --> L[Prisma + MongoDB]
+    H --> L
+    G --> L
 ```
 
 ---
@@ -77,7 +81,7 @@ Bot-Baileys-AI/
 │   │
 │   ├── bot/
 │   │   ├── botHandler.ts          # Core message processor
-│   │   └── autoDownload.ts        # Social media auto-download
+│   │   └── autoDownload.ts        # Social Media auto-download
 │   │
 │   ├── config/
 │   │   └── botConfig.ts           # Configuration loader
@@ -95,6 +99,7 @@ Bot-Baileys-AI/
 │   │   ├── ai/
 │   │   │   └── aiCommand.ts       # AI command (!ai)
 │   │   ├── basic/
+│   │   │   ├── changelog.ts       # !changelog
 │   │   │   ├── help.ts            # !help / !menu
 │   │   │   ├── ping.ts            # !ping
 │   │   │   ├── reportbug.ts       # !reportbug
@@ -106,15 +111,18 @@ Bot-Baileys-AI/
 │   │   │   └── togglebot.ts       # !togglebot
 │   │   ├── media/
 │   │   │   ├── facebook.ts        # !facebook
+│   │   │   ├── galleryDlSticker.ts # !gdlsticker
 │   │   │   ├── instagram.ts       # !instagram
 │   │   │   ├── pinterest.ts       # !pinterest
 │   │   │   ├── sticker.ts         # !sticker
 │   │   │   ├── stickerToImage.ts  # !toimg
 │   │   │   ├── tiktok.ts          # !tiktok / !tt
+│   │   │   ├── twitter.ts         # !twitter
 │   │   │   └── youtube.ts         # !youtube
 │   │   ├── owner/
 │   │   │   ├── eval.ts            # !eval
 │   │   │   ├── exec.ts            # !exec
+│   │   │   ├── speedtest.ts       # !speedtest
 │   │   │   └── test_owner.ts      # Owner test
 │   │   └── session/
 │   │       ├── create_session.ts       # !create_session
@@ -122,7 +130,8 @@ Bot-Baileys-AI/
 │   │       └── list_sessions.ts        # !listsessions
 │   │
 │   ├── services/
-│   │   ├── aiService.ts           # AI provider abstraction
+│   │   ├── aiService.ts           # AI provider abstraction + function calling
+│   │   ├── systemPrompt.ts        # System prompts (private + group) with dynamic date
 │   │   ├── aiModeHandler.ts       # AI mode handler
 │   │   └── groupToggle.ts         # Group AI toggle
 │   │
@@ -131,15 +140,31 @@ Bot-Baileys-AI/
 │   │   ├── sessionHelper.ts       # Bridge: session + bot handler
 │   │   └── authStateDB.ts         # (deprecated/optional)
 │   │
+│   ├── tools/
+│   │   ├── index.ts               # registerAllTools() barrel
+│   │   ├── toolRegistry.ts        # Central tool registry singleton
+│   │   └── definitions/
+│   │       ├── index.ts           # Registers all 6 tools
+│   │       ├── socialDownload.ts  # Unified: IG, TikTok, FB, Twitter
+│   │       ├── downloadYoutube.ts # YouTube downloader
+│   │       ├── pinterestSearch.ts # Pinterest image search
+│   │       ├── galleryDlSticker.ts # gallery-dl sticker creation
+│   │       ├── webFetch.ts        # Firecrawl web scraper
+│   │       └── webSearch.ts       # Firecrawl web search
+│   │
 │   ├── types/
 │   │   ├── index.ts               # Re-export
 │   │   ├── command.ts             # CommandContext, CommandConfig, dll
 │   │   ├── plugin.ts              # Plugin, PluginModule, CategoryPlugin
+│   │   ├── tools.ts               # AIToolDefinition, ToolContext, etc.
 │   │   └── nexo-aio-downloader.d.ts  # Type declarations
 │   │
 │   └── utils/
+│       ├── galleryDlSticker.ts    # gallery-dl process + sticker creation
 │       ├── logger.ts              # Logging utility
 │       ├── pinterest.ts           # Pinterest helper
+│       ├── toolCallFilter.ts      # DSML parsing, artifact detection/stripping
+│       ├── twitterDownloader.ts   # yt-dlp based Twitter/X download
 │       └── youtubeButtonHandler.ts # YouTube button handler
 │
 ├── config.json                    # Opsional: bot config file
@@ -164,11 +189,14 @@ sequenceDiagram
     participant PR as Prisma
     participant BH as BotHandler
     participant PM as PluginManager
+    participant Tools as ToolRegistry
 
     U->>Entry: node dist/index.js [--session=X] [--force-clear] [--only]
     
     Entry->>Entry: Load dotenv, validate DATABASE_URL
     Entry->>Entry: Parse CLI arguments
+    
+    Note over Entry: registerAllTools() — Register 6 AI tools
     
     alt --only mode
         Entry->>Entry: Skip DB sessions, run ONLY --session=X
@@ -213,6 +241,7 @@ Bertanggung jawab untuk:
 - Memuat environment variables via `dotenv`
 - Memvalidasi koneksi database
 - Memproses CLI arguments (`--session`, `--force-clear`, `--only`)
+- **Register semua AI tools** via `registerAllTools()` sebelum session dimulai
 - Memuat session aktif dari database atau membuat session baru
 - Menangani graceful shutdown (SIGINT/SIGTERM)
 
@@ -268,7 +297,7 @@ Menjembatani SessionManager dengan BotHandler:
 
 ### 4.3 Bot Layer
 
-**File:** [`src/bot/botHandler.ts`](src/bot/botHandler.ts:35) | [`src/bot/autoDownload.ts`](src/bot/autoDownload.ts:1)
+**File:** [`src/bot/botHandler.ts`](src/bot/botHandler.ts:35)
 
 #### BotHandler
 
@@ -293,40 +322,26 @@ flowchart TD
     Check --> |No + Group| GRP{Group Auto-Reply?}
     Check --> |No + Private| AI{AI Mode On?}
     
-    GRP --> |Bot mentioned/replied/called| GAI[AI Group Reply]
+    GRP --> |Bot mentioned/replied/called| GAI[AI Group Reply<br/>chatWithTools + tool calls]
     GRP --> |No| END[End]
     
-    AI --> |Yes| HAI[Handle AI Message]
-    AI --> |No| SM{Social Link?}
-    
-    SM --> |Yes| D[Auto Download]
-    SM --> |No| END
+    AI --> |Yes| HAI[Handle AI Message<br/>chatWithTools + tool calls]
+    AI --> |No| END
     
     CMD --> |Button| YT[YouTube Button Handler]
     CMD --> |Prefix| EX[Execute Command]
+    
+    GAI --> |stripToolCallArtifacts| FILTER1[Clean artifacts from response]
+    HAI --> |stripToolCallArtifacts| FILTER2[Clean artifacts from response]
 ```
 
 **Fitur yang ditangani:**
 1. **Maintenance mode** — tolak command non-owner saat maintenance
-2. **Group auto-reply** — AI merespon ketika bot di-mention, di-reply, atau dipanggil
-3. **AI mode** — Percakapan AI di private chat
-4. **Auto-download** — Deteksi otomatis link sosial media
-5. **Button replies** — Handle interactive button responses (YouTube)
-6. **Command execution** — via PluginManager
-
-#### AutoDownload
-
-**File:** [`src/bot/autoDownload.ts`](src/bot/autoDownload.ts:1)
-
-Mendeteksi link sosial media via regex patterns dan mendownload konten:
-
-| Platform | Regex Pattern | Downloader |
-|----------|--------------|------------|
-| Instagram | `instagram.com/p/`, `instagram.com/reel/` | `nexo-aio-downloader` |
-| TikTok | `tiktok.com/@user/video/`, `vm.tiktok.com/` | `@tobyg74/tiktok-api-dl` |
-| YouTube | `youtube.com/watch?v=`, `youtu.be/` | `nexo-aio-downloader` (partial) |
-| Facebook | `facebook.com/`, `fb.watch/` | `nexo-aio-downloader` |
-| Twitter/X | `twitter.com/.../status/`, `x.com/.../status/` | `nexo-aio-downloader` |
+2. **Group auto-reply** — AI merespon ketika bot di-mention, di-reply, atau dipanggil; menggunakan `chatWithTools()` dengan group system prompt
+3. **AI mode** — Percakapan AI di private chat; menggunakan `chatWithTools()` dengan private system prompt
+4. **Button replies** — Handle interactive button responses (YouTube)
+5. **Command execution** — via PluginManager
+6. **Tool call artifact filtering** — `stripToolCallArtifacts()` diaplikasikan ke semua respons AI
 
 ### 4.4 Plugin System
 
@@ -434,9 +449,9 @@ interface CommandContext {
 
 #### AI Service
 
-**File:** [`src/services/aiService.ts`](src/services/aiService.ts:19)
+**File:** [`src/services/aiService.ts`](src/services/aiService.ts:30)
 
-Singleton yang menyediakan abstraksi AI multi-provider:
+Singleton yang menyediakan abstraksi AI multi-provider dengan function calling:
 
 ```mermaid
 flowchart TD
@@ -446,19 +461,29 @@ flowchart TD
         P --> |openai| OAI[OpenAI-compatible API]
         P --> |openrouter| OR[OpenRouter API]
         P --> |ollama| OL[Ollama API]
+        P --> |other| OTH[Custom OpenAI-compatible API]
         
         OAI --> S1[Streaming via SSE]
         OR --> S1
+        OTH --> S1
         OL --> S2[Streaming via JSON Lines]
     end
     
-    subgraph Features
-        CH[Conversation History<br/>Map: sessionId -> ChatMessage[]]
-        CE[Conversation Expiry<br/>10 menit untuk grup]
-        MC[Multi-Provider<br/>OpenAI, OpenRouter, Ollama]
+    subgraph "Function Calling"
+        FC[chatWithTools]
+        FC --> MR[Multi-round loop<br/>max 4 rounds]
+        MR --> TC{Tool Calls?}
+        TC --> |Native tool_calls| EX[Execute via ToolRegistry]
+        TC --> |DSML artifacts| DSML[parseDsmlToolCalls]
+        DSML --> EX
+        EX --> APPEND[Append results to messages]
+        APPEND --> MR
+        TC --> |No| RESP[Return final response]
+        RESP --> FILTER[stripToolCallArtifacts]
     end
     
-    App[BotHandler / aiCommand] --> |chat/chatStream| AIService
+    App[BotHandler / aiCommand] --> |chatWithTools| AIService
+    AIService --> FC
 ```
 
 **Provider Configuration:**
@@ -467,8 +492,24 @@ flowchart TD
 | openai | `OPENAI_API_KEY` | `OPENAI_BASE_URL` | `gpt-4o-mini` |
 | openrouter | `OPENROUTER_API_KEY` | `OPENROUTER_BASE_URL` | `anthropic/claude-3-haiku` |
 | ollama | - | `OLLAMA_BASE_URL` | `llama3.2` |
+| other | `OTHER_API_KEY` | `OTHER_BASE_URL` | `OTHER_MODEL` |
 
-Fitur OpenRouter spesifik: tools `openrouter:datetime` dan `openrouter:web_search` untuk akses real-time.
+**Function Calling:**
+- `chatWithTools()` — Multi-round execution loop, mendukung native `tool_calls` dan DSML artifact recovery
+- Semua provider non-Ollama menerima tools array
+- Ollama: fallback ke chat biasa tanpa tools
+- Tool artifacts otomatis di-strip dari respons akhir via `stripToolCallArtifacts()`
+
+#### System Prompt
+
+**File:** [`src/services/systemPrompt.ts`](src/services/systemPrompt.ts:16)
+
+System prompts di-extract ke file terpisah dengan dynamic date/time injection:
+- `getSystemPrompt()` — Untuk private AI chat
+- `getGroupSystemPrompt(time, pushName)` — Untuk group auto-reply
+- Inject `Date.now().toLocaleDateString('id-ID')` untuk real-time awareness
+- Anti-year-bias instruction: _"JANGAN PERNAH nambahin tahun ke query search"_
+- Group prompt: personality chameleon, anti-rambling, time roasting, banter, slang control, greeting rules, toxic handling, tool usage instructions lengkap
 
 #### AI Mode Handler
 
@@ -561,11 +602,55 @@ Priority loading: `config.json` > Environment Variables > Default Values
 | Maintenance | `maintenance` | `MAINTENANCE` | `false` |
 | Maintenance Message | `maintenanceMessage` | `MAINTENANCE_MESSAGE` | "🔧 Bot sedang..." |
 
-### 4.8 Utility Layer
+### 4.8 Tool System
+
+**Directory:** [`src/tools/`](src/tools/)
+
+Sistem tool/AI function calling yang terintegrasi dengan `aiService.ts`.
+
+#### ToolRegistry
+
+**File:** [`src/tools/toolRegistry.ts`](src/tools/toolRegistry.ts:7)
+
+Singleton yang mengelola registrasi dan eksekusi tools:
+
+| Method | Description |
+|--------|-------------|
+| `register(name, definition, execute)` | Daftarkan tool baru |
+| `registerAll(tools)` | Batch register tools |
+| `getApiDefinitions()` | Dapatkan array definisi tool untuk OpenAI API |
+| `executeToolCall(toolCall, context)` | Eksekusi satu tool call |
+| `executeToolCalls(toolCalls, context)` | Eksekusi multiple tool calls |
+
+#### Tool Definitions (6 tools)
+
+**File:** [`src/tools/definitions/index.ts`](src/tools/definitions/index.ts:1)
+
+| Tool | File | Description | Key Params |
+|------|------|-------------|------------|
+| `download_social_media` | [`socialDownload.ts`](src/tools/definitions/socialDownload.ts) | Download dari Instagram, TikTok, Facebook, Twitter/X | `url` (required) |
+| `download_youtube` | [`downloadYoutube.ts`](src/tools/definitions/downloadYoutube.ts) | Download YouTube video/audio | `url`, `format` (video/audio), `quality`, `as_document` |
+| `pinterest_search` | [`pinterestSearch.ts`](src/tools/definitions/pinterestSearch.ts) | Cari gambar dari Pinterest | `query` (required) |
+| `gallery_dl_sticker` | [`galleryDlSticker.ts`](src/tools/definitions/galleryDlSticker.ts) | Buat stiker dari URL/keyword via gallery-dl | `url` or `query`, `pack`, `author`, `sticker_type`, `index` |
+| `web_fetch` | [`webFetch.ts`](src/tools/definitions/webFetch.ts) | Scrape web page via Firecrawl | `url` (required), `maxChars`, `formats` |
+| `web_search` | [`webSearch.ts`](src/tools/definitions/webSearch.ts) | Search web via Firecrawl | `query` (required), `maxResults` |
+
+#### Tool Utilities
+
+| File | Purpose |
+|------|---------|
+| [`src/utils/toolCallFilter.ts`](src/utils/toolCallFilter.ts) | DSML/XML parsing, tool call artifact detection & stripping |
+| [`src/utils/twitterDownloader.ts`](src/utils/twitterDownloader.ts) | Twitter/X download via yt-dlp |
+| [`src/utils/galleryDlSticker.ts`](src/utils/galleryDlSticker.ts) | gallery-dl process execution + sticker creation via wa-sticker-formatter |
+
+### 4.9 Utility Layer
 
 - **Logger** ([`src/utils/logger.ts`](src/utils/logger.ts:1)): Simple logger dengan level (silent, error, warn, info, debug) dan emoji support
 - **YouTube Button Handler** ([`src/utils/youtubeButtonHandler.ts`](src/utils/youtubeButtonHandler.ts)): Handle interactive button untuk YouTube download
-- **Pinterest Helper** ([`src/utils/pinterest.ts`](src/utils/pinterest.ts)): Pinterest download utility
+- **Pinterest Helper** ([`src/utils/pinterest.ts`](src/utils/pinterest.ts)): Pinterest download utility (cheerio-based)
+- **gallery-dl Sticker** ([`src/utils/galleryDlSticker.ts`](src/utils/galleryDlSticker.ts)): Buat stiker WhatsApp dari gallery-dl
+- **Twitter Downloader** ([`src/utils/twitterDownloader.ts`](src/utils/twitterDownloader.ts)): Twitter/X media download via yt-dlp
+- **Tool Call Filter** ([`src/utils/toolCallFilter.ts`](src/utils/toolCallFilter.ts)): DSML parsing dan artifact filtering
 
 ---
 
@@ -580,7 +665,7 @@ sequenceDiagram
     participant BH as BotHandler
     participant PM as PluginManager
     participant AI as AIService
-    participant AD as AutoDownload
+    participant TR as ToolRegistry
     
     WA->>SM: messages.upsert {type: notify}
     SM->>BH: Message event
@@ -596,26 +681,25 @@ sequenceDiagram
     
     alt Group + Not Command
         BH->>BH: Check bot mentioned/replied?
-        BH->>AI: Group auto-reply
-        AI->>BH: AI response
+        BH->>AI: chatWithTools(group system prompt)
+        AI->>TR: executeToolCall (if AI calls tool)
+        TR->>TR: Download / Search / Fetch
+        TR->>WA: Send media directly (if applicable)
+        TR-->>AI: Tool result
+        AI->>AI: stripToolCallArtifacts
+        AI-->>BH: Final response
         BH->>WA: Send quoted reply
     end
     
     alt Private + AI Mode On
-        BH->>AI: handleAIMessage
-        AI->>BH: AI response
+        BH->>AI: chatWithTools(private system prompt)
+        AI->>TR: executeToolCall (if AI calls tool)
+        TR->>TR: Download / Search / Fetch
+        TR->>WA: Send media directly (if applicable)
+        TR-->>AI: Tool result
+        AI->>AI: stripToolCallArtifacts
+        AI-->>BH: Final response
         BH->>WA: Send reply
-    end
-    
-    alt Social Media Link Detected
-        BH->>AD: downloadFromSocialMedia
-        AD->>AD: Detect platform
-        AD->>AD: Download & send media
-        AD->>WA: Send video/image
-    end
-    
-    alt Button Reply
-        BH->>BH: handleYouTubeButton
     end
     
     alt Command
@@ -624,6 +708,10 @@ sequenceDiagram
         PM->>PM: Check permissions
         PM->>PM: Execute handler
         PM->>WA: Send response
+    end
+    
+    alt Button Reply
+        BH->>BH: handleYouTubeButton
     end
 ```
 
@@ -651,10 +739,10 @@ Setiap command didaftarkan ke:
 | Category | Path | Commands |
 |----------|------|----------|
 | `ai` | `src/plugins/ai/` | `!ai` |
-| `basic` | `src/plugins/basic/` | `!help`, `!ping`, `!reportbug`, `!status`, `!testbutton` |
+| `basic` | `src/plugins/basic/` | `!changelog`, `!help`, `!ping`, `!reportbug`, `!status`, `!testbutton` |
 | `group` | `src/plugins/group/` | `!hidetag`, `!setgroup`, `!togglebot` |
-| `media` | `src/plugins/media/` | `!tiktok`, `!instagram`, `!facebook`, `!youtube`, `!pinterest`, `!sticker`, `!toimg` |
-| `owner` | `src/plugins/owner/` | `!eval`, `!exec`, (owner test) |
+| `media` | `src/plugins/media/` | `!facebook`, `!gdlsticker`, `!instagram`, `!pinterest`, `!sticker`, `!toimg`, `!tiktok`, `!twitter`, `!youtube` |
+| `owner` | `src/plugins/owner/` | `!eval`, `!exec`, `!speedtest`, (owner test) |
 | `session` | `src/plugins/session/` | `!create_session`, `!disconnect`, `!listsessions` |
 
 ---
@@ -718,31 +806,83 @@ flowchart TD
         OAI[OpenAI-Compatible]
         OR[OpenRouter]
         OL[Ollama]
+        OTH[Other<br/>Custom OpenAI-compatible]
+    end
+    
+    subgraph "Function Calling"
+        FC[chatWithTools]
+        FC --> TR[ToolRegistry]
+        TR --> DS[download_social_media]
+        TR --> YT[download_youtube]
+        TR --> PS[pinterest_search]
+        TR --> GS[gallery_dl_sticker]
+        TR --> WF[web_fetch]
+        TR --> WS[web_search]
     end
     
     subgraph Features
         S[Streaming Response]
         H[Conversation History]
         M[Multi-Model Switching]
-        T[OpenRouter Tools:<br/>datetime, web_search]
+        DSML[DSML Artifact Recovery]
+        FILTER[Tool Artifact Stripping]
     end
     
     OAI --> S
+    OAI --> FC
     OR --> S
-    OR --> T
+    OR --> FC
+    OTH --> S
+    OTH --> FC
     OL --> S
+    OL --> xFC[No function calling]
 ```
 
 ### AI Chat Flow
 
-1. **Command Mode** (`!ai <question>`): Single question → streaming response via AI
-2. **Toggle Mode** (`!ai on`): Semua pesan di private chat otomatis direspon AI
-3. **Group Auto-Reply**: Bot di-mention/di-reply/dipanggil → AI merespon di grup
+1. **Command Mode** (`!ai <question>`): Single question → `chatWithTools()` → streaming response via AI
+2. **Toggle Mode** (`!ai on`): Semua pesan di private chat otomatis direspon AI via `chatWithTools()`
+3. **Group Auto-Reply**: Bot di-mention/di-reply/dipanggil → `chatWithTools()` dengan group prompt
+
+### Function Calling Flow
+
+1. User mengirim pesan yang membutuhkan tool (e.g., "download video IG ini")
+2. `chatWithTools()` mengirim pesan + tools array ke AI API
+3. AI memutuskan tool mana yang dipanggil + parameters
+4. AI mengembalikan `tool_calls` (native API) atau DSML artifacts (recovery)
+5. `executeToolCall()` menjalankan tool → media dikirim langsung ke user via socket
+6. Hasil tool dikembalikan ke AI untuk response akhir
+7. Maksimal 4 round tool execution
+8. `stripToolCallArtifacts()` membersihkan artifacts dari response akhir
 
 ### System Prompts
 
+**File:** [`src/services/systemPrompt.ts`](src/services/systemPrompt.ts:16)
+
 - **Private AI:** Friendly, helpful, tidak membantu coding
 - **Group AI:** Casual, pake bahasa Indonesia gaul, personality chameleon, strict time awareness, anti-robotic
+- **Dynamic date/time:** `Date.now().toLocaleDateString('id-ID')` di-inject setiap request
+- **Anti-year-bias:** Instruksi eksplisit untuk tidak menambah tahun ke query search
+- **Group prompt features:** Anti-rambling, time roasting, banter, slang control, greeting rules, toxic handling, tool usage instructions lengkap
+
+### DSML Tool Call Recovery
+
+Untuk model AI yang tidak mendukung native `tool_calls`, sistem DSML (Directive System Markup Language) memungkinkan model memanggil tool melalui format XML-like dalam teks:
+
+```
+<鄽 download_social_media>
+鄽鄽url: "https://instagram.com/p/xyz"
+</鄽 download_social_media>
+```
+
+`parseDsmlToolCalls()` menggunakan whitelist nama tool yang terdaftar untuk mencegah prompt injection.
+
+### Tool Call Artifact Filter
+
+`stripToolCallArtifacts()` membersihkan residual artifacts dari respons AI:
+- DSML tags
+- JSON function call blocks
+- Raw XML tool call markup
 
 ### Conversation History
 
@@ -844,7 +984,7 @@ services:
 | `DATABASE_URL` | **Yes** | MongoDB connection string |
 | `OWNER_NUMBERS` | No | Owner WhatsApp numbers (comma-separated) |
 | `PREFIXES` | No | Command prefixes (default: `!`) |
-| `AI_PROVIDER` | No | `openai`, `openrouter`, or `ollama` |
+| `AI_PROVIDER` | No | `openai`, `openrouter`, `ollama`, or `other` |
 | `OPENAI_BASE_URL` | No | OpenAI-compatible API URL |
 | `OPENAI_API_KEY` | No | OpenAI API key |
 | `OPENAI_MODEL` | No | Model name |
@@ -853,6 +993,14 @@ services:
 | `OPENROUTER_MODEL` | No | OpenRouter model |
 | `OLLAMA_BASE_URL` | No | Ollama server URL |
 | `OLLAMA_MODEL` | No | Ollama model |
+| `OTHER_API_KEY` | No | API key untuk provider 'other' |
+| `OTHER_BASE_URL` | No | Base URL untuk provider 'other' |
+| `OTHER_MODEL` | No | Model untuk provider 'other' |
+| `FIRECRAWL_URL` | No | Firecrawl API URL (default: `https://api.firecrawl.dev`) |
+| `GALLERY_DL_BIN` | No | Path ke binary gallery-dl |
+| `GALLERY_DL_TIMEOUT_MS` | No | Timeout untuk gallery-dl (default: 60000) |
+| `GALLERY_DL_SEARCH_TEMPLATE` | No | URL template untuk search gallery-dl |
+| `GALLERY_DL_COOKIES` | No | File cookies untuk gallery-dl |
 | `INCLUDE_SESSIONS` | No | Session IDs to load (comma-separated) |
 | `EXCLUDE_SESSIONS` | No | Session IDs to skip (comma-separated) |
 | `LOG_LEVEL` | No | Log level: `silent`, `error`, `warn`, `info`, `debug` |
@@ -868,7 +1016,8 @@ services:
 flowchart TD
     subgraph External
         WA[WhatsApp Servers]
-        AI_API[AI API Providers<br/>OpenAI / OpenRouter / Ollama]
+        AI_API[AI API Providers<br/>OpenAI / OpenRouter / Ollama / Other]
+        FIRECRAWL[Firecrawl API<br/>Web Search + Fetch]
         MONGO[MongoDB]
     end
     
@@ -884,16 +1033,27 @@ flowchart TD
         AI[AI Commands]
         BASIC[Basic Commands]
         GROUP[Group Commands]
-        MEDIA[Media Commands]
-        OWNER[Owner Commands]
+        MEDIA[Media Commands<br/>+ !gdlsticker !toimg !twitter]
+        OWNER[Owner Commands<br/>+ !speedtest]
         SESSION[Session Commands]
     end
     
     subgraph "Services"
-        AIS[AIService]
+        AIS[AIService<br/>chatWithTools]
+        SP[SystemPrompt<br/>dynamic date injection]
         AMH[AIModeHandler]
         GT[GroupToggle]
-        AD[AutoDownload]
+    end
+    
+    subgraph "Tool System"
+        TR[ToolRegistry]
+        SOC[download_social_media]
+        YT[download_youtube]
+        PS[pinterest_search]
+        GS[gallery_dl_sticker]
+        WF[web_fetch]
+        WS[web_search]
+        DSML[toolCallFilter<br/>DSML parse + strip]
     end
     
     subgraph "Database Layer"
@@ -904,17 +1064,19 @@ flowchart TD
     subgraph "Config & Utils"
         CFG[botConfig]
         LOG[Logger]
-        YT[YouTube Button Handler]
+        GDL[galleryDlSticker util]
+        TWT[twitterDownloader]
+        YTH[YouTube Button Handler]
     end
     
     WA <-->|WebSocket| SM
     ENTRY --> SH
     ENTRY --> SM
+    ENTRY --> TR
     SH --> BH
     SM --> BH
     BH --> PM
     BH --> AIS
-    BH --> AD
     BH --> CFG
     PM --> AI
     PM --> BASIC
@@ -922,14 +1084,26 @@ flowchart TD
     PM --> MEDIA
     PM --> OWNER
     PM --> SESSION
+    AIS --> SP
+    AIS --> TR
     AIS --> AI_API
-    AD --> AI_API
+    AIS --> DSML
+    TR --> SOC
+    TR --> YT
+    TR --> PS
+    TR --> GS
+    TR --> WF
+    TR --> WS
+    GS --> GDL
+    SOC --> TWT
+    WF --> FIRECRAWL
+    WS --> FIRECRAWL
     SM --> APS
     APS --> PR
     AIS --> PR
     GT --> PR
     PR --> MONGO
-    YT --> BH
+    YTH --> BH
     LOG --> SM
     LOG --> PM
 ```
@@ -937,4 +1111,6 @@ flowchart TD
 ---
 
 > **Dokumentasi ini dibuat pada:** 17 Juni 2026  
+> **Dokumentasi ini diupdate pada:** 25 Juni 2026
+> **Versi:** 1.1.0  
 > **Maintainer:** Tim Bot-Baileys-AI

@@ -19,6 +19,7 @@ Multi-session WhatsApp bot with plugin architecture, media download capabilities
 - Node.js (v18 or higher)
 - MongoDB database
 - pnpm (recommended) or npm/yarn
+- gallery-dl for gallery URL sticker generation (`python -m pip install -U gallery-dl`)
 
 ## Installation
 
@@ -145,6 +146,9 @@ pnpm dev:new -- --session=staging --only
 - `!tiktok <url>` - Download TikTok video
 - `!yt <url>` - Download YouTube video
 - `!sticker` - Convert image/video to sticker (reply to media)
+- `!gdlsticker <url/query> [pack|author] [-full|-cropped|-default] [-i nomor]` - Create sticker from gallery-dl supported URL or a plain keyword like `kucing`
+
+AI mode can also create stickers from gallery/image URLs or keywords through the `gallery_dl_sticker` tool when the user asks naturally, for example: `jadiin stiker kucing` or `jadiin stiker dari <url>`.
 
 ### Session Commands (Admin Only)
 - `!create_session <id>` / `!cs <id>` - Create new session
@@ -242,6 +246,7 @@ pnpm prisma:studio
 - **pino**: Fast JSON logger
 - **nexo-aio-downloader**: All-in-one media downloader
 - **@tobyg74/tiktok-api-dl**: TikTok video downloader
+- **gallery-dl**: Gallery/image downloader for AI sticker creation
 - **wa-sticker-formatter**: WhatsApp sticker creation
 - **link-preview-js**: Link preview generation
 
@@ -266,6 +271,12 @@ pnpm prisma:studio
 - Verify the URL is correct and accessible
 - Some platforms may have rate limits or require authentication
 - Check console logs for specific error messages
+
+### gallery-dl sticker errors
+- Install gallery-dl locally with `python -m pip install -U gallery-dl`
+- If the binary is not in PATH, set `GALLERY_DL_BIN` in `.env`
+- Keyword search uses `GALLERY_DL_SEARCH_TEMPLATE`; the default is Pinterest search via gallery-dl
+- For sites that require login, export cookies to a `cookies.txt` file and set `GALLERY_DL_COOKIES`
 
 ### Database errors
 - Run `pnpm prisma:migrate` to ensure schema is up to date
