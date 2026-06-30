@@ -1,5 +1,5 @@
 import nexo from 'nexo-aio-downloader';
-import instagramDownload from '../utils/instagram.js';
+import instagramDownload, { cleanupMergedFile } from '../utils/instagram.js';
 import type { WASocket } from '@innovatorssoft/baileys';
 import { createRequire } from 'module';
 import {
@@ -107,12 +107,35 @@ async function downloadInstagram(url: string, socket: WASocket, fromJid: string)
     const startTime = Date.now();
     const result = await instagramDownload(url);
 
-    if (result.status && result.data && result.data.url.length > 0) {
-      const urls = result.data.url;
-      const isVideo = result.data.isVideo;
-      const processTime = ((Date.now() - startTime) / 1000).toFixed(2);
-      const captionText = result.data.caption;
+    if (!result.status || !result.data) {
+      await sendErrorMessage(
+        socket,
+        fromJid,
+        `❌ ${result.message || 'Gagal mengambil media dari Instagram. Link tidak valid atau media tidak ditemukan.'}`,
+      );
+      return { success: false, error: 'Gagal mengambil media dari Instagram' };
+    }
 
+    const { url: urls, isVideo, caption: captionText, mergedFilePath } = result.data;
+    const processTime = ((Date.now() - startTime) / 1000).toFixed(2);
+
+    // DASH video — send the merged local file (single message, no spam)
+    if (isVideo && mergedFilePath) {
+      const cap = `📸 Instagram Video${captionText ? `\n\n${captionText}` : ''}\n\n⏱️ Process Time: ${processTime} seconds\n\n_Downloaded automatically_`;
+      try {
+        await socket.sendMessage(fromJid, {
+          video: { url: mergedFilePath },
+          caption: cap,
+          mimetype: 'video/mp4',
+        });
+      } finally {
+        setTimeout(() => cleanupMergedFile(mergedFilePath), 60_000);
+      }
+      return { success: true, url: mergedFilePath, type: 'video' };
+    }
+
+    // Non-DASH: send one message per URL (carousel images, single-file videos)
+    if (urls.length > 0) {
       for (let i = 0; i < urls.length; i++) {
         const cap = i === 0
           ? `📸 Instagram ${isVideo ? 'Video' : 'Photo'}${captionText ? `\n\n${captionText}` : ''}\n\n⏱️ Process Time: ${processTime} seconds\n\n_Downloaded automatically_`
@@ -130,12 +153,7 @@ async function downloadInstagram(url: string, socket: WASocket, fromJid: string)
           });
         }
       }
-
-      return {
-        success: true,
-        url: urls[0],
-        type: isVideo ? 'video' : 'image',
-      };
+      return { success: true, url: urls[0], type: isVideo ? 'video' : 'image' };
     }
 
     await sendErrorMessage(
@@ -143,17 +161,11 @@ async function downloadInstagram(url: string, socket: WASocket, fromJid: string)
       fromJid,
       `❌ ${result.message || 'Gagal mengambil media dari Instagram. Link tidak valid atau media tidak ditemukan.'}`,
     );
-    return {
-      success: false,
-      error: 'Gagal mengambil media dari Instagram',
-    };
+    return { success: false, error: 'Gagal mengambil media dari Instagram' };
   } catch (error) {
     console.error('Instagram download error:', error);
     await sendErrorMessage(socket, fromJid, '❌ Gagal mendownload dari Instagram. Link mungkin privat atau tidak valid.');
-    return {
-      success: false,
-      error: 'Gagal mendownload dari Instagram',
-    };
+    return { success: false, error: 'Gagal mendownload dari Instagram' };
   }
 }
 

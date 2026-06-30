@@ -168,34 +168,22 @@ function flattenEntries(entry: YtDlpEntry): YtDlpEntry[] {
 }
 
 /**
- * Extract all direct media URLs from a single entry.
- * Checks: top-level url → formats[]/requested_formats[] → thumbnails[] (image posts).
+ * Extract a single best media URL from an entry for non-DASH content.
+ *
+ * Priority:
+ * 1. Top-level `url` (non-DASH single-file video or image)
+ * 2. Largest thumbnail (Instagram image posts store CDN URLs here)
+ *
+ * DASH-streamed content is excluded here — it will be handled by downloadMergedVideo().
  */
-function extractUrlsFromEntry(entry: YtDlpEntry): string[] {
-  const urls: string[] = [];
-
-  // 1. Top-level direct URL
+function extractBestUrlFromEntry(entry: YtDlpEntry): string | null {
+  // 1. Top-level direct URL — only for non-DASH (single file)
   if (entry.url && typeof entry.url === 'string' && entry.url.startsWith('http')) {
-    urls.push(entry.url);
+    return entry.url;
   }
 
-  // 2. Nested formats (video/audio streams)
-  const nested = Array.isArray(entry.formats)
-    ? entry.formats
-    : Array.isArray(entry.requested_formats)
-      ? entry.requested_formats
-      : [];
-  for (const fmt of nested) {
-    if (fmt.url && typeof fmt.url === 'string' && fmt.url.startsWith('http')) {
-      urls.push(fmt.url);
-    }
-  }
-
-  // 3. Thumbnails (image posts put CDN URLs here, largest resolution = actual image)
-  //    Only include if we haven't found anything else — dedupe by picking the
-  //    single highest-resolution thumbnail per entry.
-  if (urls.length === 0 && Array.isArray(entry.thumbnails) && entry.thumbnails.length > 0) {
-    // Pick the thumbnail with the largest resolution
+  // 2. Thumbnails (image posts) — pick the highest-resolution
+  if (Array.isArray(entry.thumbnails) && entry.thumbnails.length > 0) {
     const sorted = [...entry.thumbnails].sort((a, b) => {
       const areaA = (a.width ?? 0) * (a.height ?? 0);
       const areaB = (b.width ?? 0) * (b.height ?? 0);
@@ -203,11 +191,11 @@ function extractUrlsFromEntry(entry: YtDlpEntry): string[] {
     });
     const best = sorted[0];
     if (best.url && typeof best.url === 'string' && best.url.startsWith('http')) {
-      urls.push(best.url);
+      return best.url;
     }
   }
 
-  return urls;
+  return null;
 }
 
 /**
@@ -366,8 +354,34 @@ function buildResult(entries: YtDlpEntry[]): {
   const isVideoPost = slides.some((e) => isVideo(e)) || isDashVideo(first);
   const needsMerge = isDashVideo(first);
 
-  // Collect all URLs from every slide entry
-  const urls = slides.flatMap((e) => extractUrlsFromEntry(e));
+  if (needsMerge) {
+    // DASH video: raw format URLs are separate video-only + audio-only streams.
+    // They are unplayable on WhatsApp and would cause spam. The mergedFilePath
+    // from downloadMergedVideo() is the single deliverable. Leave url[] sparse
+    // so consumers know to check mergedFilePath.
+    return {
+      result: {
+        status: true,
+        data: {
+          url: [], // empty — use mergedFilePath instead
+          caption: extractCaption(first),
+          username: first.uploader ?? null,
+          like: typeof first.like_count === 'number' ? first.like_count : null,
+          comment: typeof first.comment_count === 'number' ? first.comment_count : null,
+          isVideo: true,
+        },
+      },
+      needsMerge: true,
+      mergeVideoId: first.id || first.webpage_url?.split('/').pop()?.split('?')[0] || null,
+    };
+  }
+
+  // Non-DASH: pick one best URL per slide
+  const urls: string[] = [];
+  for (const slide of slides) {
+    const best = extractBestUrlFromEntry(slide);
+    if (best) urls.push(best);
+  }
 
   if (urls.length === 0) {
     console.error(
@@ -401,8 +415,8 @@ function buildResult(entries: YtDlpEntry[]): {
         isVideo: isVideoPost,
       },
     },
-    needsMerge,
-    mergeVideoId: first.id || first.webpage_url?.split('/').pop()?.split('?')[0] || null,
+    needsMerge: false,
+    mergeVideoId: null,
   };
 }
 
