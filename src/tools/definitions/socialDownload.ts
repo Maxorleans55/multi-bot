@@ -1,5 +1,6 @@
 import nexo from 'nexo-aio-downloader';
 import { createRequire } from 'module';
+import instagramDownload, { cleanupMergedFile } from '../../utils/instagram.js';
 import type { AIToolDefinition, ToolExecuteFunction, ToolContext } from '../../types/tools.js';
 import {
   getTwitterInfo,
@@ -27,36 +28,62 @@ function detectPlatform(url: string): Platform | null {
 // ─── Instagram ───────────────────────────────────────────────────────────────
 
 async function handleInstagram(url: string, context: ToolContext) {
-  const result = await nexo.instagram(url);
+  const result = await instagramDownload(url);
 
-  if (result.data?.url && result.data.url.length > 0) {
-    const mediaUrl = result.data.url[0];
-    const isVideo = result.data.isVideo;
+  if (result.status && result.data && result.data.url.length > 0) {
+    const { url: urls, isVideo, caption: captionText, mergedFilePath } = result.data;
 
     if (context.socket && context.fromJid) {
-      if (isVideo) {
-        await context.socket.sendMessage(context.fromJid, {
-          video: { url: mediaUrl },
-          caption: `📸 Instagram Video\n\n_Downloaded via AI_`,
-        });
-      } else {
-        await context.socket.sendMessage(context.fromJid, {
-          image: { url: mediaUrl },
-          caption: `📸 Instagram Photo\n\n_Downloaded via AI_`,
-        });
+      // For DASH video with merged file, send the local file (has audio+video)
+      if (isVideo && mergedFilePath) {
+        const cap = `📸 Instagram Video${captionText ? `\n\n${captionText}` : ''}\n\n_Downloaded via AI_`;
+        try {
+          await context.socket.sendMessage(context.fromJid, {
+            video: { url: mergedFilePath },
+            caption: cap,
+            mimetype: 'video/mp4',
+          });
+        } finally {
+          setTimeout(() => cleanupMergedFile(mergedFilePath), 60_000);
+        }
+
+        return {
+          success: true,
+          message: 'Berhasil mendownload video dari Instagram. Media sudah dikirim ke user.',
+          data: { type: 'video', urls },
+        };
+      }
+
+      // Non-DASH: send raw URLs
+      for (let i = 0; i < urls.length; i++) {
+        const cap = i === 0
+          ? `📸 Instagram ${isVideo ? 'Video' : 'Photo'}${captionText ? `\n\n${captionText}` : ''}\n\n_Downloaded via AI_`
+          : undefined;
+
+        if (isVideo) {
+          await context.socket.sendMessage(context.fromJid, {
+            video: { url: urls[i] },
+            ...(cap ? { caption: cap } : {}),
+          });
+        } else {
+          await context.socket.sendMessage(context.fromJid, {
+            image: { url: urls[i] },
+            ...(cap ? { caption: cap } : {}),
+          });
+        }
       }
     }
 
     return {
       success: true,
-      message: `Berhasil mendownload ${isVideo ? 'video' : 'foto'} dari Instagram. Media sudah dikirim ke user.`,
-      data: { type: isVideo ? 'video' : 'image', url: mediaUrl },
+      message: `Berhasil mendownload ${urls.length} ${isVideo ? 'video' : 'foto'} dari Instagram. Media sudah dikirim ke user.`,
+      data: { type: isVideo ? 'video' : 'image', urls },
     };
   }
 
   return {
     success: false,
-    message: 'Gagal mengambil media dari Instagram. Link mungkin tidak valid, privat, atau media tidak ditemukan.',
+    message: result.message || 'Gagal mengambil media dari Instagram. Link mungkin tidak valid, privat, atau media tidak ditemukan.',
   };
 }
 

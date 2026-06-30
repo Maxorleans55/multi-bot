@@ -1,4 +1,5 @@
 import nexo from 'nexo-aio-downloader';
+import instagramDownload from '../utils/instagram.js';
 import type { WASocket } from '@innovatorssoft/baileys';
 import { createRequire } from 'module';
 import {
@@ -104,34 +105,44 @@ export async function downloadFromSocialMedia(
 async function downloadInstagram(url: string, socket: WASocket, fromJid: string): Promise<DownloadResult> {
   try {
     const startTime = Date.now();
-    const result = await nexo.instagram(url);
+    const result = await instagramDownload(url);
 
-    if (result.data?.url && result.data.url.length > 0) {
-      const mediaUrl = result.data.url[0];
+    if (result.status && result.data && result.data.url.length > 0) {
+      const urls = result.data.url;
       const isVideo = result.data.isVideo;
+      const processTime = ((Date.now() - startTime) / 1000).toFixed(2);
+      const captionText = result.data.caption;
 
-      if (isVideo) {
-        const processTime = ((Date.now() - startTime) / 1000).toFixed(2);
-        await socket.sendMessage(fromJid, {
-          video: { url: mediaUrl },
-          caption: `📸 Instagram Video\n\n⏱️ Process Time: ${processTime} seconds\n\n_Downloaded automatically_`,
-        });
-      } else {
-        const processTime = ((Date.now() - startTime) / 1000).toFixed(2);
-        await socket.sendMessage(fromJid, {
-          image: { url: mediaUrl },
-          caption: `📸 Instagram Photo\n\n⏱️ Process Time: ${processTime} seconds\n\n_Downloaded automatically_`,
-        });
+      for (let i = 0; i < urls.length; i++) {
+        const cap = i === 0
+          ? `📸 Instagram ${isVideo ? 'Video' : 'Photo'}${captionText ? `\n\n${captionText}` : ''}\n\n⏱️ Process Time: ${processTime} seconds\n\n_Downloaded automatically_`
+          : undefined;
+
+        if (isVideo) {
+          await socket.sendMessage(fromJid, {
+            video: { url: urls[i] },
+            ...(cap ? { caption: cap } : {}),
+          });
+        } else {
+          await socket.sendMessage(fromJid, {
+            image: { url: urls[i] },
+            ...(cap ? { caption: cap } : {}),
+          });
+        }
       }
 
       return {
         success: true,
-        url: mediaUrl,
+        url: urls[0],
         type: isVideo ? 'video' : 'image',
       };
     }
 
-    await sendErrorMessage(socket, fromJid, '❌ Gagal mengambil media dari Instagram. Link tidak valid atau media tidak ditemukan.');
+    await sendErrorMessage(
+      socket,
+      fromJid,
+      `❌ ${result.message || 'Gagal mengambil media dari Instagram. Link tidak valid atau media tidak ditemukan.'}`,
+    );
     return {
       success: false,
       error: 'Gagal mengambil media dari Instagram',

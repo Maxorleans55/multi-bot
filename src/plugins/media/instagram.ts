@@ -1,6 +1,4 @@
-import nexo from 'nexo-aio-downloader';
-import { generateInteractiveButtonMessage } from '@innovatorssoft/baileys';
-
+import instagramDownload, { cleanupMergedFile } from '../../utils/instagram.js';
 import type { CommandModule } from '../../types/index.js';
 
 const instagramCommand: CommandModule = {
@@ -22,24 +20,65 @@ const instagramCommand: CommandModule = {
     }
 
     await context.socket.sendMessage(context.fromJid, {
-      text: 'Mohon tunggu sebentar...',
+      text: '⏳ Mohon tunggu sebentar...',
     });
 
-    const result = await nexo.instagram(url);
-
+    const result = await instagramDownload(url);
     const processTime = new Date().getTime() - Number(context.simplified?.messageTimeStamp) * 1000;
+    console.log(result);
 
-    // TODO: Implement Instagram download logic
-    // This is a placeholder for future implementation
-    if (result.data?.url[0]) {
+    if (!result.status || !result.data) {
       await context.socket.sendMessage(context.fromJid, {
-        video: { url: result.data.url[0] },
-        caption: 'Instagram video\n\nProcess Time: ' + (processTime / 1000).toFixed(2) + ' seconds'
+        text: `❌ Gagal mengunduh dari Instagram. ${result.message || 'Pastikan URL benar. Bila masalah berlanjut, silahkan hubungi Owner.'}`,
       });
+      return;
+    }
+
+    const { url: urls, isVideo, caption, mergedFilePath } = result.data;
+    const timeSuffix = `\n\n⏱️ Process Time: ${(processTime / 1000).toFixed(2)} seconds`;
+
+    // If this is a DASH video and we have a merged file, send that instead of raw URLs
+    if (isVideo && mergedFilePath) {
+      const cap = `📸 *Instagram Video*${caption ? `\n\n${caption}` : ''}${timeSuffix}`;
+      try {
+        await context.socket.sendMessage(context.fromJid, {
+          video: { url: mergedFilePath },
+          caption: cap,
+          mimetype: 'video/mp4',
+        });
+      } finally {
+        // Schedule cleanup after WhatsApp has consumed the file
+        setTimeout(() => cleanupMergedFile(mergedFilePath), 60_000);
+      }
+      return;
+    }
+
+    if (isVideo) {
+      // Non-DASH video — send raw URLs directly
+      for (let i = 0; i < urls.length; i++) {
+        const isFirst = i === 0;
+        const cap = isFirst
+          ? `📸 *Instagram Video*${caption ? `\n\n${caption}` : ''}${timeSuffix}`
+          : undefined;
+
+        await context.socket.sendMessage(context.fromJid, {
+          video: { url: urls[i] },
+          ...(cap ? { caption: cap } : {}),
+        });
+      }
     } else {
-      await context.socket.sendMessage(context.fromJid, {
-        text: 'Gagal mengunduh video dari Instagram, pastikan URL benar\nBila masalah berlanjut, silahkan hubungi Owner'
-      });
+      // Images — first with caption, rest as-is
+      for (let i = 0; i < urls.length; i++) {
+        const isFirst = i === 0;
+        const cap = isFirst
+          ? `📸 *Instagram Photo*${caption ? `\n\n${caption}` : ''}${timeSuffix}`
+          : undefined;
+
+        await context.socket.sendMessage(context.fromJid, {
+          image: { url: urls[i] },
+          ...(cap ? { caption: cap } : {}),
+        });
+      }
     }
   },
 };

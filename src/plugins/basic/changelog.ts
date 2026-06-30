@@ -18,44 +18,54 @@ const changelogCommand: CommandModule = {
 ┃   _Apa yang baru?_
 ╰━━━━━━━━━━━━━━━━━━╯
 
+📅 *30 Juni 2026*
+
+╭━━━「 📸 *Instagram Download* 」━━━╮
+┃
+┃ • *Fix:* Error "Gagal mengekstrak
+┃   URL media dari Instagram" pas
+┃   download Reels/foto/slide.
+┃
+┃ • *Fix:* Video Reels sekarang ada
+┃   suaranya, nggak sepi lagi.
+┃
+┃ • *Fix:* AI mode juga udah bisa
+┃   download dari Instagram lagi.
+┃
+╰━━━━━━━━━━━━━━━━━━╯
+
 📅 *22 Juni 2026*
 
 ╭━━━「 🔥 *Cari & Baca Web* 」━━━╮
 ┃
-┃ • *Baca halaman web* — Sekarang
-┃   bot bisa baca artikel, berita,
-┃   atau halaman web apa pun.
-┃   Tinggal kirim URL, bot bakal
-┃   bacain dan kasih ringkasannya.
+┃ • *Feat:* Bot bisa baca halaman
+┃   web — tinggal kirim URL, bot
+┃   bacain & kasih ringkasan.
 ┃
-┃ • *Cari info* — Mau tau harga
-┃   emas, cuaca, berita terbaru?
-┃   Tinggal tanya aja, bot bakal
-┃   search langsung dari internet.
+┃ • *Feat:* Cari info langsung dari
+┃   internet — harga emas, cuaca,
+┃   berita, tinggal tanya aja.
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 
 ╭━━━「 🧠 *AI Makin Pinter* 」━━━╮
 ┃
-┃ • *Tau tanggal & jam* — Sekarang
-┃   AI tau hari ini tanggal berapa
-┃   jadi jawabannya nggak bakal
-┃   ngelantur tahun kemarin.
+┃ • *Feat:* AI sekarang tau tanggal
+┃   & jam, jadi jawaban nggak
+┃   ngelantur tahun lalu.
 ┃
-┃ • *Search makin akurat* — pas
-┃   nyari info, udah diatur biar
-┃   dapet yang paling baru.
+┃ • *Feat:* Search diatur biar
+┃   hasilnya paling baru & akurat.
 ┃
-┃ • *Di grup juga bisa* — Fitur
-┃   search dan baca web udah bisa
-┃   dipake di chat grup juga.
+┃ • *Feat:* Fitur search & baca web
+┃   bisa dipake di grup juga.
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 
 ╭━━━「 ⚙️ *Lainnya* 」━━━╮
 ┃
-┃ • Bersihin kode biar lebih
-┃   ringan dan cepat.
+┃ • *Style:* Bersihin & rapiin kode
+┃   biar lebih ringan & cepat.
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 

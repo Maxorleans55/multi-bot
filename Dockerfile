@@ -68,6 +68,15 @@ ENV NODE_ENV=production
 # Override at runtime with -e EXCLUDE_SESSIONS="" or -e INCLUDE_SESSIONS="prod,staging"
 ENV EXCLUDE_SESSIONS=dev
 
+# ─── Instagram Cookies (yt-dlp) ──────────────────────────────────────
+# Di Coolify / Docker, mount cookies.txt sebagai file mount:
+#   Host path:  /var/coolify/cookies.txt (atau path file yg kamu upload)
+#   Container:  /app/cookies.txt
+# Lalu set env var:
+#   INSTAGRAM_DL_COOKIES=/app/cookies.txt
+# Atau otomatis set default path di sini:
+ENV INSTAGRAM_DL_COOKIES=/app/cookies.txt
+
 # Use tini as PID 1 for proper signal forwarding (SIGINT/SIGTERM)
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
