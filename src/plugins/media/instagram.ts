@@ -25,7 +25,6 @@ const instagramCommand: CommandModule = {
 
     const result = await instagramDownload(url);
     const processTime = new Date().getTime() - Number(context.simplified?.messageTimeStamp) * 1000;
-    console.log(result);
 
     if (!result.status || !result.data) {
       await context.socket.sendMessage(context.fromJid, {
