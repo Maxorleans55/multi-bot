@@ -52,7 +52,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m venv /opt/gallery-dl \
-    && /opt/gallery-dl/bin/pip install --no-cache-dir --upgrade pip gallery-dl yt-dlp-nightly
+    && /opt/gallery-dl/bin/pip install --no-cache-dir --upgrade pip gallery-dl \
+    && /opt/gallery-dl/bin/pip install --no-cache-dir --upgrade --pre "yt-dlp[default]"
 
 ENV PATH="/opt/gallery-dl/bin:${PATH}"
 
