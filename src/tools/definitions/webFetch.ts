@@ -88,7 +88,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     };
   }
 
-  const scrapeUrl = `${firecrawlBase}/v1/scrape`;
+  const scrapeUrl = `${firecrawlBase}/v2/scrape`;
 
   try {
     console.log(`[Tool:WebFetch] 🔥 Fetching via Firecrawl: ${url}`);
@@ -188,7 +188,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     if (status === 404) {
       return {
         success: false,
-        message: `Endpoint Firecrawl tidak ditemukan (404) di ${getFirecrawlUrl()}/v1/scrape. Periksa konfigurasi FIRECRAWL_URL.`,
+        message: `Endpoint Firecrawl tidak ditemukan (404) di ${getFirecrawlUrl()}/v2/scrape. Periksa konfigurasi FIRECRAWL_URL.`,
       };
     }
 

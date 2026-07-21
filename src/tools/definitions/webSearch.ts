@@ -65,7 +65,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     };
   }
 
-  const searchUrl = `${firecrawlBase}/v1/search`;
+  const searchUrl = `${firecrawlBase}/v2/search`;
 
   try {
     console.log(`[Tool:WebSearch] 🔍 Searching via Firecrawl: ${query}`);
@@ -139,7 +139,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     if (status === 404) {
       return {
         success: false,
-        message: `Endpoint Firecrawl search tidak ditemukan (404) di ${getFirecrawlUrl()}/v1/search. Periksa konfigurasi FIRECRAWL_URL.`,
+        message: `Endpoint Firecrawl search tidak ditemukan (404) di ${getFirecrawlUrl()}/v2/search. Periksa konfigurasi FIRECRAWL_URL.`,
       };
     }
 
