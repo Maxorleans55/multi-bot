@@ -30,7 +30,7 @@ function detectPlatform(url: string): Platform | null {
 async function handleInstagram(url: string, context: ToolContext) {
   const result = await instagramDownload(url);
 
-  if (result.status && result.data && result.data.url.length > 0) {
+  if (result.status && result.data) {
     const { url: urls, isVideo, caption: captionText, mergedFilePath } = result.data;
 
     if (context.socket && context.fromJid) {
