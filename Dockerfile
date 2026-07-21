@@ -67,7 +67,9 @@ ENV NODE_ENV=production
 
 # 🔥 Auto-skip the 'dev' session when loading from DB.
 # Override at runtime with -e EXCLUDE_SESSIONS="" or -e INCLUDE_SESSIONS="prod,staging"
-ENV EXCLUDE_SESSIONS=dev
+# ENV EXCLUDE_SESSIONS=dev
+# ENV EXCLUDE_SESSIONS=default
+ENV INCLUDE_SESSIONS=default
 
 # ─── Instagram Cookies (yt-dlp) ──────────────────────────────────────
 # Di Coolify / Docker, mount cookies.txt sebagai file mount:
