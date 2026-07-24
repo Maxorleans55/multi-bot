@@ -18,7 +18,9 @@ interface FirecrawlSearchResult {
 
 interface FirecrawlSearchResponse {
   success: boolean;
-  data: FirecrawlSearchResult[];
+  data: {
+    web: FirecrawlSearchResult[];
+  };
   id?: string;
   error?: string;
 }
@@ -92,7 +94,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
       };
     }
 
-    const results = result.data.slice(0, maxResults);
+    const results = result.data.web.slice(0, maxResults);
 
     if (results.length === 0) {
       return {
