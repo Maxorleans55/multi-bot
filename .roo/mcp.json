@@ -24,7 +24,8 @@
 			"timeout": 60,
 			"alwaysAllow": [
 				"ctx_doctor",
-				"ctx_upgrade"
+				"ctx_upgrade",
+				"ctx_execute"
 			]
 		}
 	}
