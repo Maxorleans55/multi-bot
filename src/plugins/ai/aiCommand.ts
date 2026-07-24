@@ -5,8 +5,7 @@ import aiService, { AIService } from '../../services/aiService.js';
 import { isOwner } from '../../config/botConfig.js';
 import { getSystemPrompt } from '../../services/systemPrompt.js';
 import { stripToolCallArtifacts } from '../../utils/toolCallFilter.js';
-
-const ACTIVE_SESSIONS = new Map<string, { enabled: boolean; mode: 'single' | 'chat' }>();
+import { isAIModeEnabledSync, setAIModeEnabled } from '../../services/aiModePersistence.js';
 
 const DEFAULT_SYSTEM_PROMPT = getSystemPrompt();
 
@@ -25,7 +24,7 @@ const AICommand: CommandModule = {
     const userId = context.simplified?.user_id || context.fromJid;
 
     if (args[0]?.toLowerCase() === 'on') {
-      ACTIVE_SESSIONS.set(userId, { enabled: true, mode: 'chat' });
+      await setAIModeEnabled(userId, true);
       await context.socket.sendMessage(context.fromJid, {
         text: '✅ Mode AI aktif! Semua pesan yang kamu kirim akan ditangani oleh AI.\n\nGunakan !aioff untuk menonaktifkan mode AI.',
       });
@@ -34,7 +33,7 @@ const AICommand: CommandModule = {
 
     if (args[0]?.toLowerCase() === 'off') {
       aiService.clearConversation(userId);
-      ACTIVE_SESSIONS.delete(userId);
+      await setAIModeEnabled(userId, false);
       await context.socket.sendMessage(context.fromJid, {
         text: '❌ Mode AI dinonaktifkan. Kembali ke mode perintah normal.',
       });
@@ -118,7 +117,7 @@ const AICommand: CommandModule = {
 • ${context.simplified?.prefix || '!'}ai clear - Bersihkan percakapan
 • ${context.simplified?.prefix || '!'}ai models - Lihat model yang tersedia
 
-🔹 Mode AI aktif: ${ACTIVE_SESSIONS.has(userId) ? 'Ya' : 'Tidak'}`,
+🔹 Mode AI aktif: ${isAIModeEnabledSync(userId) ? 'Ya' : 'Tidak'}`,
       });
       return;
     }
@@ -163,12 +162,17 @@ const AICommand: CommandModule = {
   },
 };
 
+/**
+ * Periksa apakah AI mode aktif untuk user tertentu.
+ * Menggunakan node-cache (sync) — tanpa DB hit. Cache dipopulasi saat startup
+ * (via initAIModePersistence) dan di-update write-through saat toggle.
+ */
 export function isAIModeEnabled(userId: string): boolean {
-  return ACTIVE_SESSIONS.get(userId)?.enabled ?? false;
+  return isAIModeEnabledSync(userId);
 }
 
 export function getAIMode(userId: string): 'single' | 'chat' {
-  return ACTIVE_SESSIONS.get(userId)?.mode ?? 'single';
+  return 'chat';
 }
 
 export function handleAIMessage(userId: string, message: string): Promise<string> {
@@ -177,7 +181,7 @@ export function handleAIMessage(userId: string, message: string): Promise<string
 
 export function clearAISession(userId: string): void {
   aiService.clearConversation(userId);
-  ACTIVE_SESSIONS.delete(userId);
+  setAIModeEnabled(userId, false);
 }
 
 export default AICommand;

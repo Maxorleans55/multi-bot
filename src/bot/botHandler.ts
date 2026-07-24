@@ -4,6 +4,7 @@ import PluginManager from '../plugins/pluginManager.js';
 import { detectSocialMediaLink, downloadFromSocialMedia } from './autoDownload.js';
 import { getPrefixes, isMaintenance, getMaintenanceMessage, isOwner } from '../config/botConfig.js';
 import { isAIModeEnabled } from '../plugins/ai/aiCommand.js';
+import { isAIModeEnabled as isAIModeEnabledAsync, initAIModePersistence } from '../services/aiModePersistence.js';
 import { isAIGroupEnabled, initAIGroupToggle } from '../services/groupToggle.js';
 import moment from 'moment';
 import NodeCache from 'node-cache';
@@ -12,6 +13,8 @@ import { stripToolCallArtifacts } from '../utils/toolCallFilter.js';
 import { validateMessage, validateJid } from '../utils/messageValidator.js';
 import { rateLimiter } from '../utils/rateLimiter.js';
 import { log } from '../utils/logger.js';
+import { userService } from '../services/userService.js';
+import { premiumService } from '../services/premiumService.js';
 
 moment.locale('jv');
 
@@ -55,6 +58,7 @@ export class BotHandler {
     try {
       await this.pluginManager.loadPlugins();
       await initAIGroupToggle();
+      await initAIModePersistence();
     } catch (error) {
       log.error(`[${this.sessionId}] ❌ Failed to load plugins:`, error as object);
       // Don't throw — allow the bot to run even if plugin loading partially fails
@@ -462,6 +466,13 @@ export class BotHandler {
     try {
       const { command, args, botNumber, from, isCmd, body, isGroup, user_id, mentions, message: rawMessage, quotedInfo } = simplified;
 
+      // ── User auto-registration (fire & forget, non-blocking) ──────────
+      if (user_id) {
+        userService.ensureUser(user_id, simplified.pushName ?? undefined, this.sessionId).catch(err => {
+          log.debug(`[${this.sessionId}] Non-critical: user persistence failed: ${(err as Error).message}`);
+        });
+      }
+
       // Validate user_id JID
       if (user_id) {
         const jidValidation = validateJid(user_id);
@@ -525,6 +536,19 @@ export class BotHandler {
           const isCalled = body?.toLowerCase() ? /(^|\s)(bot\b|bang\s*bot\b|kak\s*bot\b|mas\s*bot\b)/i.test(body) : false;
 
           if ((isBotMentioned || isReplyToBot || isCalled || tagAll) && isAIGroupEnabled(from)) {
+            // ── Daily limit: group AI ─────────────────────────────────
+            if (user_id && premiumService.isGroupAiLimitEnabled()) {
+              const groupAiCheck = await premiumService.checkGroupAiLimit(user_id);
+              if (!groupAiCheck.allowed) {
+                const tierMsg = groupAiCheck.tier !== 'free'
+                  ? `\n\n💡 Kamu masih bisa upgrade ke tier lebih tinggi untuk menambah limit.`
+                  : `\n\n💡 Upgrade ke premium untuk mendapatkan 500 group AI chat/hari: ketik *!premium check*`;
+                await this.socket.sendMessage(from, {
+                  text: `❌ Limit group AI harian kamu habis (${groupAiCheck.limit}/hari). Coba lagi besok.${tierMsg}`,
+                });
+                return;
+              }
+            }
             // Rate-limit group auto-reply per-user
             if (user_id) {
               const aiRateCheck = rateLimiter.check(user_id, '__GROUP_AI__', 3); // 3s per user
@@ -546,8 +570,23 @@ export class BotHandler {
       // ── AI mode (private chat only) ────────────────────────────────────
       if (!isCmd && from && !isGroup) {
         try {
-          const aiEnabled = isAIModeEnabled(user_id || simplified.from || '');
+          const targetUserId = user_id || simplified.from || '';
+          // Dua lapis: sync cache (no overhead) || async DB fallback (cold cache)
+          const aiEnabled = isAIModeEnabled(targetUserId) || await isAIModeEnabledAsync(targetUserId);
           if (aiEnabled && body) {
+            // ── Daily limit: private AI ──────────────────────────────
+            if (user_id && premiumService.isPrivateAiLimitEnabled()) {
+              const privateAiCheck = await premiumService.checkPrivateAiLimit(user_id);
+              if (!privateAiCheck.allowed) {
+                const tierMsg = privateAiCheck.tier !== 'free'
+                  ? `\n\n💡 Kamu masih bisa upgrade ke tier lebih tinggi.`
+                  : `\n\n💡 Upgrade ke premium: ketik *!premium check*`;
+                await this.socket.sendMessage(from, {
+                  text: `❌ Limit AI chat harian kamu habis (${privateAiCheck.limit}/hari). Coba lagi besok.${tierMsg}`,
+                });
+                return;
+              }
+            }
             // Rate-limit AI messages per-user
             if (user_id) {
               const aiRateCheck = rateLimiter.check(user_id, '__AI_CHAT__', 2); // 2s per user
@@ -612,13 +651,32 @@ export class BotHandler {
 
       // ── Command execution ──────────────────────────────────────────────
       if (isCmd && command && from) {
+        const cmdConfig = this.pluginManager.getCommand(command)?.config;
+        const effectiveUserId = user_id || from;
+
         // Rate-limit command execution per-user
         if (user_id) {
-          const cmdRateCheck = rateLimiter.check(user_id, command, 2); // 2s default per-command
+          const cooldownSec = cmdConfig?.cooldown ?? 2;
+          const cmdRateCheck = rateLimiter.check(user_id, command, cooldownSec);
           if (!cmdRateCheck.allowed) {
             log.debug(`[${this.sessionId}] ⏱ Rate-limited command "${command}" from ${user_id}`);
             await this.socket.sendMessage(from, {
               text: `⏱ Mohon tunggu ${Math.ceil(cmdRateCheck.remainingMs / 1000)} detik sebelum menggunakan perintah \`${command}\` lagi.`,
+            });
+            return;
+          }
+        }
+
+        // Premium daily limit check (only for commands that opt-in with limitEnabled: true)
+        if (cmdConfig?.limitEnabled === true && premiumService.isCommandLimitEnabled()) {
+          const limitCheck = await premiumService.checkCommandLimit(effectiveUserId);
+          if (!limitCheck.allowed) {
+            log.info(`[${this.sessionId}] 🚫 Premium command limit reached for "${command}" by ${effectiveUserId.split('@')[0]} (tier: ${limitCheck.tier})`);
+            await this.socket.sendMessage(from, {
+              text: `⚠️ Limit harian kamu untuk perintah *${command}* sudah habis.\n\n` +
+                `📊 Tier: *${limitCheck.tier.toUpperCase()}*\n` +
+                `🔄 Reset: besok jam 00:00 WIB\n\n` +
+                `💎 Upgrade ke tier Premium/Pro untuk limit lebih tinggi.`,
             });
             return;
           }
@@ -638,6 +696,11 @@ export class BotHandler {
 
         try {
           const executed = await this.pluginManager.executeCommand(command, context, args);
+
+          // Increment premium usage counter (fire-and-forget)
+          if (executed && cmdConfig?.limitEnabled === true) {
+            premiumService.incrementCommandUsage(effectiveUserId).catch(() => {});
+          }
 
           if (!executed) {
             await this.socket.sendMessage(from, {
@@ -719,6 +782,11 @@ export class BotHandler {
       );
 
       await this.socket.sendPresenceUpdate('paused', to).catch(() => {});
+
+      // ── Increment group AI usage ─────────────────────────────────
+      if (simplified.user_id) {
+        premiumService.incrementGroupAiUsage(simplified.user_id).catch(() => {});
+      }
 
       // Safety filter: strip any remaining tool call artifacts
       const safeResponse = stripToolCallArtifacts(fullResponse);
@@ -803,6 +871,11 @@ export class BotHandler {
       );
 
       await this.socket.sendPresenceUpdate('paused', to).catch(() => {});
+
+      // ── Increment private AI usage ──────────────────────────────
+      if (simplified.user_id) {
+        premiumService.incrementPrivateAiUsage(simplified.user_id).catch(() => {});
+      }
 
       // Safety filter: strip any remaining tool call artifacts
       const safeResponse = stripToolCallArtifacts(fullResponse);
