@@ -24,6 +24,8 @@ export interface CommandConfig {
   adminOnly?: boolean;
   groupOnly?: boolean;
   privateOnly?: boolean;
+  /** Whether this command is only accessible by premium/pro users. Owners bypass this check. */
+  premiumOnly?: boolean;
   /** Whether this command is subject to premium daily limit. Default: false — must opt-in per command. */
   limitEnabled?: boolean;
 }
