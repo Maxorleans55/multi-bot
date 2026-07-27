@@ -49,8 +49,6 @@ model BotConfig {
 }
 
 // ─── Session Metadata ────────────────────────────────────────────
-// Digunakan untuk tracking lifecycle session WhatsApp.
-// Terpisah dari auth state Baileys (WaAuthState).
 model WaSession {
   id                 String   @id @default(auto()) @map("_id") @db.ObjectId
   sessionId          String   @unique
@@ -69,10 +67,6 @@ model WaSession {
 }
 
 // ─── Baileys Auth State ──────────────────────────────────────────
-// Setiap baris menyimpan satu credential/key dari Baileys.
-// - creds  → type="creds",   key="creds"
-// - keys   → type=<keyType>, key=<id>
-// Compound unique mencegah duplikasi (digunakan untuk upsert).
 model WaAuthState {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   sessionId String
@@ -87,4 +81,47 @@ model WaAuthState {
 
   @@unique([sessionId, type, key])
   @@index([sessionId])
+}
+
+// ─── User & Premium ──────────────────────────────────────────────
+model User {
+  id             String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String      @unique
+  pushName       String?
+  sessionId      String?
+  tier           String      @default("free")
+  premiumExpiry  DateTime?
+  status         String      @default("active")
+  isBlocked      Boolean     @default(false)
+  aiModeEnabled  Boolean     @default(false)
+  firstSeen      DateTime    @default(now())
+  lastSeen       DateTime    @default(now())
+  messageCount   Int         @default(1)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  usageLogs      UsageLog[]
+
+  @@index([sessionId])
+  @@index([lastSeen])
+  @@index([tier])
+  @@index([status])
+}
+
+// ─── Usage Tracking ──────────────────────────────────────────────
+model UsageLog {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String
+  date           String
+  aiChatCount    Int      @default(0)
+  groupAiCount   Int      @default(0)
+  commandCount   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
 }

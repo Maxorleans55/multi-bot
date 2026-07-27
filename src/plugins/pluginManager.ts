@@ -7,6 +7,7 @@ import { log } from '../utils/logger.js';
 import type { PluginModule, CommandContext, CommandConfig, CategoryPlugin, CommandModule } from '../types/index.js';
 import { isOwner } from '../config/botConfig.js';
 import { rateLimiter } from '../utils/rateLimiter.js';
+import { userService } from '../services/userService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -306,6 +307,21 @@ export class PluginManager {
           text: '❌ This command can only be used in private chats',
         }).catch(() => {});
         return true;
+      }
+
+      if (commandData.config.premiumOnly) {
+        const isAuthorizedOwner = context.fromMe || isOwner(participantJid);
+        if (!isAuthorizedOwner) {
+          const user = await userService.getUser(participantJid);
+          const userTier = user?.tier ?? 'free';
+          if (userTier === 'free') {
+            log.info(`🚫 [PluginManager] Permission denied: premium only for "${resolvedCommand}" (tier: ${userTier})`);
+            await context.socket.sendMessage(context.fromJid, {
+              text: '⭐ *Premium Only!*\n\nPerintah ini hanya tersedia untuk pengguna *Premium* / *Pro*.\nHubungi owner untuk upgrade ke Premium.',
+            }).catch(() => {});
+            return true;
+          }
+        }
       }
 
       // ── Execute handler ────────────────────────────────────────────────
