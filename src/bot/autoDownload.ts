@@ -134,6 +134,17 @@ async function downloadInstagram(url: string, socket: WASocket, fromJid: string)
       return { success: true, url: mergedFilePath, type: 'video' };
     }
 
+    // Video without a playable single-file URL — the DASH merge failed or the
+    // post returned no direct stream. Don't silently send nothing.
+    if (isVideo && urls.length === 0) {
+      await sendErrorMessage(
+        socket,
+        fromJid,
+        '❌ Gagal mengunduh video Instagram: tidak ada stream video yang valid (codec tidak didukung atau post privat). Coba lagi, atau hubungi Owner bila masalah berlanjut.',
+      );
+      return { success: false, error: 'Gagal mengunduh video Instagram: tidak ada stream video yang valid' };
+    }
+
     // Non-DASH: send one message per URL (carousel images, single-file videos)
     if (urls.length > 0) {
       for (let i = 0; i < urls.length; i++) {

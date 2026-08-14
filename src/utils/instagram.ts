@@ -14,6 +14,8 @@ export interface InstagramMediaData {
   like: number | null;
   comment: number | null;
   isVideo: boolean;
+  /** Video duration in seconds (undefined for image posts) */
+  duration?: number;
 }
 
 export interface InstagramResult {
@@ -285,7 +287,13 @@ function downloadMergedVideo(url: string, videoId: string): Promise<string> {
     '--no-warnings',
     '--no-check-certificates',
     '-f',
-    'bestvideo+bestaudio/best',
+    // WhatsApp (especially Story) needs H.264 video + AAC audio in an MP4
+    // container. HEVC/VP9/AV1 streams from Instagram DASH are rejected or
+    // fail to process when re-uploaded as a Story.
+    //  1. Prefer a single pre-merged H.264/AAC mp4 (av01/h264 filters applied)
+    //  2. Fallback: bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best
+    //  3. Last resort: whatever yt-dlp considers best
+    'bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4][vcodec^=avc1]/best',
     '--merge-output-format',
     'mp4',
     '-o',
@@ -359,6 +367,7 @@ function buildResult(entries: YtDlpEntry[]): {
     // They are unplayable on WhatsApp and would cause spam. The mergedFilePath
     // from downloadMergedVideo() is the single deliverable. Leave url[] sparse
     // so consumers know to check mergedFilePath.
+    const duration = slides[0]?.duration && slides[0].duration > 0 ? slides[0].duration : undefined;
     return {
       result: {
         status: true,
@@ -369,6 +378,7 @@ function buildResult(entries: YtDlpEntry[]): {
           like: typeof first.like_count === 'number' ? first.like_count : null,
           comment: typeof first.comment_count === 'number' ? first.comment_count : null,
           isVideo: true,
+          duration,
         },
       },
       needsMerge: true,
@@ -403,6 +413,11 @@ function buildResult(entries: YtDlpEntry[]): {
     };
   }
 
+  const duration =
+    isVideoPost && typeof first.duration === 'number' && first.duration > 0
+      ? first.duration
+      : undefined;
+
   return {
     result: {
       status: true,
@@ -413,6 +428,7 @@ function buildResult(entries: YtDlpEntry[]): {
         like: typeof first.like_count === 'number' ? first.like_count : null,
         comment: typeof first.comment_count === 'number' ? first.comment_count : null,
         isVideo: isVideoPost,
+        duration,
       },
     },
     needsMerge: false,

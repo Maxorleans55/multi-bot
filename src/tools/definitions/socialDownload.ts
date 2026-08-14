@@ -54,6 +54,15 @@ async function handleInstagram(url: string, context: ToolContext) {
         };
       }
 
+      // Video without a playable single-file URL — the DASH merge failed or the
+      // post returned no direct stream. Don't silently send nothing.
+      if (isVideo && urls.length === 0) {
+        return {
+          success: false,
+          message: 'Gagal mengunduh video Instagram: tidak ada stream video yang valid (codec tidak didukung atau post privat).',
+        };
+      }
+
       // Non-DASH: send raw URLs
       for (let i = 0; i < urls.length; i++) {
         const cap = i === 0

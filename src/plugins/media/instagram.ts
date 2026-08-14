@@ -52,6 +52,15 @@ const instagramCommand: CommandModule = {
       return;
     }
 
+    // Video without a playable single-file URL — the DASH merge failed or the
+    // post returned no direct stream. Don't silently send nothing.
+    if (isVideo && urls.length === 0) {
+      await context.socket.sendMessage(context.fromJid, {
+        text: '❌ Gagal mengunduh video Instagram: tidak ada stream video yang valid (codec tidak didukung atau post privat). Coba lagi, atau hubungi Owner bila masalah berlanjut.',
+      });
+      return;
+    }
+
     if (isVideo) {
       // Non-DASH video — send raw URLs directly
       for (let i = 0; i < urls.length; i++) {
