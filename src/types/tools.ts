@@ -1,4 +1,4 @@
-import type { WASocket } from '@innovatorssoft/baileys';
+import type { WASocket } from 'baileys';
 
 /**
  * Parameter definition for an AI tool (JSON Schema format).

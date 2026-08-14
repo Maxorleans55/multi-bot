@@ -1,5 +1,5 @@
 import type { CommandModule } from '../../types/index.js';
-import type { WASocket } from '@innovatorssoft/baileys';
+import type { WASocket } from 'baileys';
 import { proto } from 'baileys';
 import util from 'util';
 

@@ -1,5 +1,5 @@
 import type { CommandModule } from '../../types/index.js';
-import { downloadContentFromMessage } from '@innovatorssoft/baileys';
+import { downloadContentFromMessage } from 'baileys';
 
 const stickerToImageCommand: CommandModule = {
   config: {

@@ -1,5 +1,4 @@
-import type { WAMessage, WAMessageUpdate, WASocket } from '@innovatorssoft/baileys';
-import { proto } from 'baileys';
+import { proto, WAMessage, WAMessageUpdate, WASocket } from 'baileys';
 import PluginManager from '../plugins/pluginManager.js';
 import { detectSocialMediaLink, downloadFromSocialMedia } from './autoDownload.js';
 import { getPrefixes, isMaintenance, getMaintenanceMessage, isOwner } from '../config/botConfig.js';
@@ -98,7 +97,7 @@ export class BotHandler {
     }
   }
 
-  private simplified(msg: proto.IWebMessageInfo) {
+  private simplified(msg: WAMessage) {
     // console.log('msg :', msg);
     const chatMessage = msg.message;
     const id = msg.key?.id;

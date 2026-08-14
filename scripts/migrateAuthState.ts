@@ -12,7 +12,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { BufferJSON } from '@innovatorssoft/baileys';
+import { BufferJSON } from 'baileys';
 
 const prisma = new PrismaClient();
 
