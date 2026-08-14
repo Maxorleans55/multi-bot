@@ -757,6 +757,7 @@ export class BotHandler {
         fromJid: to,
         sessionId: userId,
         pushName,
+        userMessage: message,
       };
 
       const groupPrompt = getGroupSystemPrompt(
@@ -855,6 +856,7 @@ export class BotHandler {
         fromJid: to,
         sessionId: userId,
         pushName: simplified.pushName ?? undefined,
+        userMessage: message,
       };
 
       let fullResponse = '';

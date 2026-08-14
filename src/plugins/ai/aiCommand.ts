@@ -130,6 +130,7 @@ const AICommand: CommandModule = {
         fromJid: context.fromJid,
         sessionId: userId,
         pushName: context.simplified?.pushName ?? undefined,
+        userMessage: question,
       };
 
       let responseBuffer = '';

@@ -64,6 +64,8 @@ export interface ToolContext {
   fromJid?: string;
   sessionId?: string;
   pushName?: string;
+  /** The raw user message that triggered this AI turn (used for intent fallback). */
+  userMessage?: string;
 }
 
 /**

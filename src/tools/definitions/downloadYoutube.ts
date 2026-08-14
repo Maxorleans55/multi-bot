@@ -90,17 +90,50 @@ export const definition: AIToolDefinition = {
   },
 };
 
+/**
+ * Detect whether the user explicitly asked for the result to be sent as a
+ * document/file (as opposed to native audio/video). This is a safety net for
+ * models that ignore the `as_document` argument in favor of `format`.
+ */
+const WANTS_DOCUMENT_PATTERN = /(?:dokumen|document|file)/i;
+const WANTS_AUDIO_PATTERN = /(?:lagu|musik|music|song|audio|mp3|suara)/i;
+
+const hasDocumentIntent = (userMessage: string): boolean =>
+  WANTS_DOCUMENT_PATTERN.test(userMessage);
+
+const hasAudioIntent = (userMessage: string): boolean =>
+  WANTS_AUDIO_PATTERN.test(userMessage);
+
 export const execute: ToolExecuteFunction = async (args, context) => {
   const input = (args.query as string | undefined)?.trim();
   if (!input) {
     return { success: false, message: 'URL atau judul YouTube tidak diberikan.' };
   }
 
+  const rawUserMessage = typeof context.userMessage === 'string' ? context.userMessage : '';
+
   const format = (args.format as string) || 'video';
   const quality = (args.quality as string) || 'best';
-  const asDocument = args.as_document === true;
 
-  console.log(`[Tool:YouTube] 🎥 Downloading: ${input} (format: ${format}, quality: ${quality}${asDocument ? ', asDocument' : ''})`);
+  // Fallback #1: if the model missed `as_document` but the user explicitly
+  // asked for a document/file, force document mode.
+  let asDocument = args.as_document === true;
+  if (!asDocument && hasDocumentIntent(rawUserMessage)) {
+    asDocument = true;
+  }
+
+  // Fallback #2: if the model picked "video" but the user asked for a song,
+  // force audio mode (prevents a song from arriving as a video).
+  const resolvedFormat =
+    format === 'video' && hasAudioIntent(rawUserMessage) ? 'audio' : format;
+
+  if (rawUserMessage) {
+    console.log(
+      `[Tool:YouTube] 🧭 Intent fallback: "${rawUserMessage}" → format=${resolvedFormat}${asDocument ? ', asDocument' : ''}`,
+    );
+  }
+
+  console.log(`[Tool:YouTube] 🎥 Downloading: ${input} (format: ${resolvedFormat}, quality: ${quality}${asDocument ? ', asDocument' : ''})`);
 
   try {
     const { youtubeDl } = await import('youtube-dl-exec');
@@ -137,7 +170,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
       output: path.join(tempDir, `${info.id || 'video'}.%(ext)s`),
     };
 
-    if (format === 'audio') {
+    if (resolvedFormat === 'audio') {
       downloadFlags.extractAudio = true;
       downloadFlags.audioFormat = 'mp3';
       downloadFlags.audioQuality = 0;
@@ -152,7 +185,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
 
     await youtubeDl(resolvedUrl, downloadFlags, { cwd: tempDir });
 
-    const ext = format === 'audio' ? 'mp3' : 'mp4';
+    const ext = resolvedFormat === 'audio' ? 'mp3' : 'mp4';
     const filePath = path.join(tempDir, `${info.id || 'video'}.${ext}`);
     const stats = await fs.stat(filePath);
 
@@ -169,7 +202,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     }
 
     if (context.socket && context.fromJid) {
-      const caption = `🎥 YouTube ${format === 'audio' ? 'Audio' : 'Video'}\n\n` +
+      const caption = `🎥 YouTube ${resolvedFormat === 'audio' ? 'Audio' : 'Video'}\n\n` +
         `📌 ${title}\n` +
         `👤 ${uploader}\n` +
         `⏱️ ${durationStr}\n` +
@@ -181,11 +214,11 @@ export const execute: ToolExecuteFunction = async (args, context) => {
         // Send as document for files up to 2GB
         await context.socket.sendMessage(context.fromJid, {
           document: { url: filePath },
-          mimetype: format === 'audio' ? 'audio/mpeg' : 'video/mp4',
+          mimetype: resolvedFormat === 'audio' ? 'audio/mpeg' : 'video/mp4',
           fileName: `${title}.${ext}`,
           caption,
         });
-      } else if (format === 'audio') {
+      } else if (resolvedFormat === 'audio') {
         await context.socket.sendMessage(context.fromJid, {
           audio: { url: filePath },
           mimetype: 'audio/mpeg',
@@ -206,8 +239,8 @@ export const execute: ToolExecuteFunction = async (args, context) => {
 
     return {
       success: true,
-      message: `Berhasil mendownload ${format === 'audio' ? 'audio' : 'video'} YouTube "${title}". Media sudah dikirim ke user.`,
-      data: { title, uploader, duration: durationStr, format, quality, fileSize: stats.size, asDocument, resolvedUrl },
+      message: `Berhasil mendownload ${resolvedFormat === 'audio' ? 'audio' : 'video'} YouTube "${title}". Media sudah dikirim ke user.`,
+      data: { title, uploader, duration: durationStr, format: resolvedFormat, quality, fileSize: stats.size, asDocument, resolvedUrl },
     };
   } catch (error: any) {
     console.error('[Tool:YouTube] Download error:', error);
