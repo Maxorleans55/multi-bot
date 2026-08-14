@@ -62,13 +62,13 @@ export const definition: AIToolDefinition = {
   type: 'function',
   function: {
     name: 'download_youtube',
-    description: 'Download media from YouTube using a YouTube URL or a search query/song title. Supports video and audio formats. Can send as document for larger file size limit (up to 2GB).',
+    description: 'Download video or audio from YouTube. Accepts EITHER a YouTube URL OR a plain search query / song title / keywords. For songs, the tool will search YouTube automatically via yt-dlp — no need to call web_search first.',
     parameters: {
       type: 'object',
       properties: {
-        url: {
+        query: {
           type: 'string',
-          description: 'A full YouTube URL (e.g. https://youtube.com/watch?v=xxx) or a search query/song title (e.g. Jangan Paksa Rindu).',
+          description: 'A YouTube URL (e.g. https://youtube.com/watch?v=xxx) OR a plain song title / search keywords (e.g. "Sederhana Sheila On 7"). The tool auto-detects whether it is a URL and searches YouTube if not.',
         },
         format: {
           type: 'string',
@@ -85,13 +85,13 @@ export const definition: AIToolDefinition = {
           description: 'Send as document instead of video/audio. Allows files up to 2GB (WhatsApp document limit). Default: false.',
         },
       },
-      required: ['url'],
+      required: ['query'],
     },
   },
 };
 
 export const execute: ToolExecuteFunction = async (args, context) => {
-  const input = (args.url as string | undefined)?.trim();
+  const input = (args.query as string | undefined)?.trim();
   if (!input) {
     return { success: false, message: 'URL atau judul YouTube tidak diberikan.' };
   }
@@ -99,6 +99,8 @@ export const execute: ToolExecuteFunction = async (args, context) => {
   const format = (args.format as string) || 'video';
   const quality = (args.quality as string) || 'best';
   const asDocument = args.as_document === true;
+
+  console.log(`[Tool:YouTube] 🎥 Downloading: ${input} (format: ${format}, quality: ${quality}${asDocument ? ', asDocument' : ''})`);
 
   try {
     const { youtubeDl } = await import('youtube-dl-exec');

@@ -83,6 +83,8 @@ export const execute: ToolExecuteFunction = async (args, context) => {
   const packName = typeof args.pack === 'string' ? args.pack : undefined;
   const authorName = typeof args.author === 'string' ? args.author : undefined;
 
+  console.log(`[Tool:PinterestSticker] 🎨 Creating: ${url || query} (count: ${count}, type: ${stickerType})`);
+
   try {
     if (count <= 1) {
       // Single sticker (original behavior)

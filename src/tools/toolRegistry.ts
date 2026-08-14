@@ -67,6 +67,14 @@ export class ToolRegistry {
   }
 
   /**
+   * Iterate over all registered tool entries.
+   * Returns an iterator of [name, ToolRegistryEntry] pairs for use with the AI SDK.
+   */
+  entries(): IterableIterator<[string, ToolRegistryEntry]> {
+    return this.tools.entries();
+  }
+
+  /**
    * Execute a single tool call from the AI.
    * Returns a properly formatted AIToolResult suitable for sending back to the API.
    */

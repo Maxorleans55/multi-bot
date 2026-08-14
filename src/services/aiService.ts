@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { generateText, streamText, dynamicTool, isStepCount, type ModelMessage } from 'ai';
 import toolRegistry from '../tools/toolRegistry.js';
-import type { AIToolCall as AIToolCallType, ToolContext } from '../types/tools.js';
+import type { ToolContext } from '../types/tools.js';
 import {
   containsToolCallArtifact,
-  parseDsmlToolCalls,
   stripToolCallArtifacts,
 } from '../utils/toolCallFilter.js';
 
@@ -12,7 +13,7 @@ type Provider = 'openai' | 'openrouter' | 'ollama' | 'other';
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | null;
-  tool_calls?: AIToolCallType[];
+  tool_calls?: unknown[];
   tool_call_id?: string;
 }
 
@@ -23,15 +24,18 @@ interface StreamChunk {
 
 type StreamCallback = (chunk: StreamChunk) => void;
 
-const OPENAI_COMPATIBLE_ENDPOINT = '/chat/completions';
-const MALFORMED_TOOL_CALL_FALLBACK = 'Maaf, pencarian gagal diproses. Silakan coba lagi sebentar.';
+const MALFORMED_TOOL_CALL_FALLBACK =
+  'Maaf, pencarian gagal diproses. Silakan coba lagi sebentar.';
 const MAX_TOOL_ROUNDS = 4;
+
+type AISdkTool = ReturnType<typeof dynamicTool>;
 
 export class AIService {
   private provider: Provider;
   private apiKey: string;
   private baseUrl: string;
   private model: string;
+  private openaiCompat: ReturnType<typeof createOpenAICompatible> | null = null;
   private conversationHistory: Map<string, ChatMessage[]> = new Map();
   private conversationExpiry: Map<string, number> = new Map();
   private readonly GROUP_EXPIRY_MS = 10 * 60 * 1000;
@@ -52,11 +56,15 @@ export class AIService {
       this.baseUrl = (process.env.OTHER_BASE_URL || '').replace(/\/+$/, '');
       this.model = process.env.OTHER_MODEL || '';
     } else {
-      // openrouter (default / backward compatible)
       this.provider = 'openrouter';
       this.apiKey = process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY || '';
-      this.baseUrl = (process.env.OPENROUTER_BASE_URL || process.env.AI_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
-      this.model = process.env.OPENROUTER_MODEL || process.env.AI_MODEL || 'anthropic/claude-3-haiku';
+      this.baseUrl = (
+        process.env.OPENROUTER_BASE_URL ||
+        process.env.AI_BASE_URL ||
+        'https://openrouter.ai/api/v1'
+      ).replace(/\/+$/, '');
+      this.model =
+        process.env.OPENROUTER_MODEL || process.env.AI_MODEL || 'anthropic/claude-3-haiku';
     }
 
     if (!this.isConfigured()) {
@@ -77,16 +85,62 @@ export class AIService {
       }
       console.warn(msg);
     } else {
-      console.log(`✅ [AIService] Provider: ${this.provider} | Model: ${this.model} | URL: ${this.baseUrl}`);
+      console.log(
+        `✅ [AIService] Provider: ${this.provider} | Model: ${this.model} | URL: ${this.baseUrl}`,
+      );
+    }
+
+    if (this.provider !== 'ollama' && this.isConfigured()) {
+      const headers: Record<string, string> | undefined =
+        this.provider === 'openrouter'
+          ? {
+              'HTTP-Referer': 'https://github.com/wahyuhp/Bot-Baileys-AI',
+              'X-Title': 'Bot-Baileys-AI',
+            }
+          : undefined;
+
+      this.openaiCompat = createOpenAICompatible({
+        name: `bot-baileys-${this.provider}`,
+        baseURL: this.baseUrl,
+        apiKey: this.apiKey || 'unused',
+        headers,
+      });
     }
   }
 
+  // ────────────────────────────────────────────────────────────────
+  //  AI SDK TOOL BRIDGE
+  // ────────────────────────────────────────────────────────────────
+
   /**
-   * Strip raw tool call artifacts from AI response text.
-   * Some models write tool invocations as visible text instead of using
-   * the proper function_call/tool_calls API. This method removes those
-   * artifacts so they never reach the user.
+   * Convert registered ToolRegistry entries into AI SDK dynamicTool() definitions.
+   * dynamicTool is used instead of tool() because tools are built from a runtime
+   * registry and the generic inference on tool() is too narrow for dynamic schemas.
    */
+  private buildAISDKTools(toolContext?: ToolContext): Record<string, AISdkTool> {
+    const tools: Record<string, AISdkTool> = {};
+
+    for (const [name, entry] of toolRegistry.entries()) {
+
+      const toolDef = {
+        description: entry.definition.function.description,
+        parameters: entry.definition.function.parameters,
+        execute: async (args: unknown) => {
+          const result = await entry.execute(args as Record<string, unknown>, toolContext || {});
+          return result;
+        },
+      } as Record<string, unknown>;
+
+      tools[name] = dynamicTool(toolDef as Parameters<typeof dynamicTool>[0]);
+    }
+
+    return tools;
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  //  PUBLIC API
+  // ────────────────────────────────────────────────────────────────
+
   private filterToolCallArtifacts(content: string): string {
     return stripToolCallArtifacts(content);
   }
@@ -96,27 +150,21 @@ export class AIService {
   }
 
   isConfigured(): boolean {
-    if (this.provider === 'ollama') {
-      return !!this.baseUrl;
-    }
-    if (this.provider === 'other') {
-      return !!this.baseUrl && !!this.apiKey;
-    }
+    if (this.provider === 'ollama') return !!this.baseUrl;
+    if (this.provider === 'other') return !!this.baseUrl && !!this.apiKey;
     return !!this.apiKey;
   }
 
-  /**
-   * Check if the current provider supports function calling / tool use.
-   * Ollama does not support it; others do.
-   */
   supportsFunctionCalling(): boolean {
     return this.provider !== 'ollama';
   }
 
+  // ─────────── Non-streaming chat (no tools) ───────────
+
   async chat(
     sessionId: string,
     userMessage: string,
-    systemPrompt?: string
+    systemPrompt?: string,
   ): Promise<string> {
     if (!this.isConfigured()) {
       throw new Error(this.getNotConfiguredMessage());
@@ -133,14 +181,40 @@ export class AIService {
     if (this.provider === 'ollama') {
       return this.callOllamaNonStream(sessionId, messages);
     }
-    return this.callOpenAICompatibleNonStream(sessionId, messages);
+
+    try {
+      const model = this.openaiCompat!.chatModel(this.model);
+
+      const result = await generateText({
+        model,
+        messages: messages as ModelMessage[],
+        allowSystemInMessages: true,
+      });
+
+      const assistantMessage = result.text || '';
+      messages.push({ role: 'assistant', content: assistantMessage });
+      this.conversationHistory.set(sessionId, messages);
+      this.setExpiry(sessionId);
+
+      return assistantMessage;
+    } catch (error: unknown) {
+      const err = error as Error & {
+        response?: { data?: { error?: { message?: string } } };
+      };
+      console.error(`[AIService] ${this.provider} API Error:`, err.response?.data || err.message);
+      throw new Error(
+        err.response?.data?.error?.message || err.message || 'Failed to get AI response',
+      );
+    }
   }
+
+  // ─────────── Streaming chat (no tools) ───────────
 
   async chatStream(
     sessionId: string,
     userMessage: string,
     systemPrompt?: string,
-    onChunk?: StreamCallback
+    onChunk?: StreamCallback,
   ): Promise<string> {
     if (!this.isConfigured()) {
       throw new Error(this.getNotConfiguredMessage());
@@ -157,39 +231,27 @@ export class AIService {
     if (this.provider === 'ollama') {
       return this.callOllamaStream(sessionId, messages, onChunk);
     }
-    return this.callOpenAICompatibleStream(sessionId, messages, onChunk);
+
+    return this.callAISDKStream(sessionId, messages, onChunk);
   }
 
-  // ────────────────────────────────────────────────────────────────
-  //  FUNCTION CALLING (TOOL USE) SUPPORT
-  // ────────────────────────────────────────────────────────────────
+  // ─────────── Chat with tools (function calling) ───────────
 
-  /**
-   * Chat with tool/function calling support.
-   *
-   * Flow:
-   *   1. Send message + registered tools to AI
-   *   2. If AI responds with tool_calls → execute tools, send results back, get final answer
-   *   3. If AI responds normally → return response directly
-   *
-   * For Ollama (no function calling), falls back to regular chatStream.
-   *
-   * @param toolContext - Socket context so tools can send media directly to the user
-   */
   async chatWithTools(
     sessionId: string,
     userMessage: string,
     systemPrompt?: string,
     onChunk?: StreamCallback,
-    toolContext?: ToolContext
+    toolContext?: ToolContext,
   ): Promise<string> {
     if (!this.isConfigured()) {
       throw new Error(this.getNotConfiguredMessage());
     }
 
-    // ── Ollama: no function calling → regular stream ──
     if (!this.supportsFunctionCalling()) {
-      console.log('[AIService] ⚠️ Provider does not support function calling. Falling back to regular chat.');
+      console.log(
+        '[AIService] ⚠️ Provider does not support function calling. Falling back to regular chat.',
+      );
       return this.chatStream(sessionId, userMessage, systemPrompt, onChunk);
     }
 
@@ -201,371 +263,167 @@ export class AIService {
 
     messages.push({ role: 'user', content: userMessage });
 
-    // Get registered tool definitions
-    const tools = toolRegistry.hasTools() ? toolRegistry.getApiDefinitions() : undefined;
+    const tools = toolRegistry.hasTools() ? this.buildAISDKTools(toolContext) : undefined;
 
-    const requestModel = async () => {
-      let response = await this.callOpenAIWithTools(messages, tools);
-
-      // A provider can occasionally stop halfway through a textual tool call.
-      // Retry the same round once before returning a user-safe fallback.
-      if (response.malformed_tool_call) {
-        console.warn('[AIService] Malformed textual tool call detected. Retrying once.');
-        response = await this.callOpenAIWithTools(messages, tools);
-
-        if (response.malformed_tool_call) {
-          return { content: MALFORMED_TOOL_CALL_FALLBACK };
-        }
-      }
-
-      return response;
-    };
-
-    let modelResponse = await requestModel();
-    let toolRound = 0;
-
-    // Support sequential tool use such as web_search -> web_fetch. Each model
-    // response may request one or more calls, then inspect their results before
-    // deciding whether another tool round is needed.
-    while (modelResponse.tool_calls?.length && toolRound < MAX_TOOL_ROUNDS) {
-      toolRound += 1;
-      console.log(
-        `[AIService] 🔧 Tool round ${toolRound}: ${modelResponse.tool_calls.length} call(s)`
-      );
-
-      messages.push({
-        role: 'assistant',
-        content: null,
-        tool_calls: modelResponse.tool_calls,
-      });
-
-      if (toolContext?.socket && toolContext?.fromJid) {
-        await toolContext.socket.sendPresenceUpdate('composing', toolContext.fromJid);
-      }
-
-      const toolResults = await toolRegistry.executeToolCalls(
-        modelResponse.tool_calls,
-        toolContext || {}
-      );
-      messages.push(...toolResults);
-
-      this.conversationHistory.set(sessionId, messages);
-      this.setExpiry(sessionId);
-
-      modelResponse = await requestModel();
-    }
-
-    if (modelResponse.tool_calls?.length) {
-      console.warn(`[AIService] Tool round limit (${MAX_TOOL_ROUNDS}) reached.`);
-      modelResponse = {
-        content: 'Maaf, permintaan ini membutuhkan terlalu banyak langkah. Coba sederhanakan pertanyaannya.',
-      };
-    }
-
-    let content = modelResponse.content || '';
-
-    // Safety filter (already filtered in callOpenAIWithTools, but double-check)
-    content = this.filterToolCallArtifacts(content);
-
-    messages.push({ role: 'assistant', content });
-    this.conversationHistory.set(sessionId, messages);
-    this.setExpiry(sessionId);
-
-    // Emit content first, then done, so handler's `!chunk.done` check captures it
-    if (onChunk) {
-      if (content) {
-        onChunk({ content, done: false });
-      }
-      onChunk({ content: '', done: true });
-    }
-
-    return content;
+    return this.callAISDKStream(sessionId, messages, onChunk, tools);
   }
+
+  // ────────────────────────────────────────────────────────────────
+  //  AI SDK STREAMING CORE
+  // ────────────────────────────────────────────────────────────────
 
   /**
-   * Make a non-streaming request to the OpenAI-compatible API with optional tools.
-   * Returns both content and possible tool_calls.
+   * Stream text via AI SDK `streamText`, with optional tools for function calling.
+   * The AI SDK handles the tool-calling loop internally via `maxSteps`.
+   *
+   * IMPORTANT: AI SDK v7 rejects `role: 'system'` inside `messages[]` by
+   * default (`allowSystemInMessages` defaults to `false`). System prompts must
+   * be passed via `instructions` option (docs: `system` is deprecated).
+   * We strip the first system message from the array and pass it separately.
+   *
+   * Built-in `maxRetries` (default: 2) handles HTTP-level retries. Our loop
+   * additionally retries on empty response content — a case the built-in retry
+   * does not cover.
    */
-  private async callOpenAIWithTools(
-    messages: ChatMessage[],
-    tools?: any[]
-  ): Promise<{
-    content: string | null;
-    tool_calls?: AIToolCallType[];
-    malformed_tool_call?: boolean;
-  }> {
-    try {
-      const body: Record<string, any> = {
-        model: this.model,
-        messages: messages,
-        stream: false,
-      };
-
-      if (tools && tools.length > 0) {
-        body.tools = tools;
-      }
-
-      const response = await axios.post<any>(
-        `${this.baseUrl}${OPENAI_COMPATIBLE_ENDPOINT}`,
-        body,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 60000,
-        }
-      );
-
-      const choice = response.data.choices?.[0];
-      const message = choice?.message;
-
-      if (!message) {
-        return { content: null };
-      }
-
-      // Check for tool_calls in response
-      if (message.tool_calls && message.tool_calls.length > 0) {
-        return {
-          content: null,
-          tool_calls: message.tool_calls.map((tc: any) => ({
-            id: tc.id,
-            type: 'function' as const,
-            function: {
-              name: tc.function?.name || '',
-              arguments: tc.function?.arguments || '{}',
-            },
-          })),
-        };
-      }
-
-      // Some models/providers serialize function calls into visible DSML text
-      // instead of returning the OpenAI-compatible `tool_calls` field. Recover
-      // those calls, but only for tool names included in this request.
-      const allowedToolNames = new Set<string>(
-        (tools || [])
-          .map((tool: any) => tool?.function?.name)
-          .filter((name: unknown): name is string => typeof name === 'string')
-      );
-      const dsmlToolCalls = parseDsmlToolCalls(message.content || '', allowedToolNames);
-      if (dsmlToolCalls.length > 0) {
-        console.warn(
-          `[AIService] Recovered ${dsmlToolCalls.length} DSML tool call(s) from model text output.`
-        );
-        return {
-          content: null,
-          tool_calls: dsmlToolCalls,
-        };
-      }
-
-      // Filter out any tool call artifacts that the model might have
-      // written as visible text instead of using proper tool_calls API
-      const rawContent = message.content || '';
-      const filteredContent = this.filterToolCallArtifacts(rawContent);
-      return {
-        content: filteredContent,
-        malformed_tool_call: !!rawContent
-          && !filteredContent
-          && containsToolCallArtifact(rawContent),
-      };
-    } catch (error: any) {
-      console.error(`[AIService] ${this.provider} API Error (tools):`, error.response?.data || error.message);
-      throw new Error(
-        error.response?.data?.error?.message ||
-        error.response?.data?.error ||
-        'Failed to get AI response'
-      );
-    }
-  }
-
-  // ─────────── OpenAI-compatible (openai | openrouter) ───────────
-
-  private async callOpenAICompatibleNonStream(sessionId: string, messages: ChatMessage[]): Promise<string> {
-    try {
-      const response = await axios.post<any>(
-        `${this.baseUrl}${OPENAI_COMPATIBLE_ENDPOINT}`,
-        {
-          model: this.model,
-          messages: messages,
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 60000,
-        }
-      );
-
-      const assistantMessage = response.data.choices[0]?.message?.content || '';
-
-      messages.push({ role: 'assistant', content: assistantMessage });
-      this.conversationHistory.set(sessionId, messages);
-      this.setExpiry(sessionId);
-
-      return assistantMessage;
-    } catch (error: any) {
-      console.error(`[AIService] ${this.provider} API Error:`, error.response?.data || error.message);
-      throw new Error(
-        error.response?.data?.error?.message ||
-        error.response?.data?.error ||
-        'Failed to get AI response'
-      );
-    }
-  }
-
-  private async callOpenAICompatibleStream(
+  private async callAISDKStream(
     sessionId: string,
     messages: ChatMessage[],
-    onChunk?: StreamCallback
+    onChunk?: StreamCallback,
+    tools?: Record<string, AISdkTool>,
   ): Promise<string> {
-    try {
-      const body: Record<string, any> = {
-        model: this.model,
-        messages: messages,
-        stream: true,
-      };
+    const MAX_EMPTY_RETRIES = 2;
 
-      // NOTE: Do NOT send tool definitions here.
-      // Tools are only sent in the initial non-streaming request (callOpenAIWithTools).
-      // Sending tools in the streaming final step causes some models to write
-      // tool invocations as visible text instead of using proper function calling.
+    for (let attempt = 0; attempt <= MAX_EMPTY_RETRIES; attempt++) {
+      try {
+        const model = this.openaiCompat!.chatModel(this.model);
 
-      const response = await axios.post(
-        `${this.baseUrl}${OPENAI_COMPATIBLE_ENDPOINT}`,
-        body,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 120000,
-          responseType: 'stream',
-        }
-      );
+        // Keep system messages in the array for proper conversation context.
+        // `instructions` option does not map identically to `role: 'system'`
+        // for many providers (OpenRouter, OpenAI-compatible endpoints).
+        // `allowSystemInMessages: true` tells AI SDK v7 to accept system roles.
+        const stopWhen = tools ? isStepCount(MAX_TOOL_ROUNDS) : undefined;
 
-      const stream = response.data;
-      return this.handleOpenAICompatibleSSEStream(sessionId, messages, stream, onChunk);
-    } catch (error: any) {
-      console.error(`[AIService] ${this.provider} API Error:`, error.response?.data || error.message);
-      throw new Error(
-        error.response?.data?.error?.message ||
-        error.response?.data?.error?.message ||
-        error.message ||
-        'Failed to get AI response'
-      );
-    }
-  }
+        const result = streamText({
+          model,
+          messages: messages as ModelMessage[],
+          tools,
+          maxSteps: tools ? MAX_TOOL_ROUNDS : 1,
+          stopWhen,
+          allowSystemInMessages: true,
+        } as Parameters<typeof streamText>[0]);
 
-  private handleOpenAICompatibleSSEStream(
-    sessionId: string,
-    messages: ChatMessage[],
-    stream: any,
-    onChunk?: StreamCallback
-  ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      let fullContent = '';
-      let sseBuffer = '';
-      let timeoutId: NodeJS.Timeout;
-      let resolved = false;
+        // Use textStream for real-time streaming. Each text delta is emitted
+        // as the model generates — including intermediate messages like
+        // "Sedang mencari..." before tool calls, and final responses after.
+        //
+        // With stopWhen: isStepCount(4), the stream now correctly continues
+        // through all tool-calling steps.
+        //
+        // IMPORTANT: AI SDK v7 stream is single-consumer. We must NOT call
+        // result.text after consuming textStream — pick one.
+        let fullText = '';
 
-      const finish = (content: string, isError = false) => {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(timeoutId);
+        for await (const chunk of result.textStream) {
+          fullText += chunk;
 
-        // Final safety filter on the fully accumulated content
-        let finalContent = this.filterToolCallArtifacts(content || '');
-        if (!finalContent && content && containsToolCallArtifact(content)) {
-          finalContent = MALFORMED_TOOL_CALL_FALLBACK;
-          if (onChunk) onChunk({ content: finalContent, done: false });
-        }
-
-        if (finalContent || !isError) {
-          if (finalContent) {
-            messages.push({ role: 'assistant', content: finalContent });
-            this.conversationHistory.set(sessionId, messages);
-            this.setExpiry(sessionId);
-          }
-          resolve(finalContent);
-        } else {
-          reject(new Error('Empty response from AI'));
-        }
-      };
-
-      timeoutId = setTimeout(() => {
-        if (!resolved) {
-          stream.emit('end');
-          finish(fullContent || '', true);
-        }
-      }, 60000);
-
-      const processSseLine = (line: string) => {
-        const normalizedLine = line.replace(/\r$/, '');
-        if (!normalizedLine.startsWith('data: ')) return;
-
-        const data = normalizedLine.slice(6);
-        if (data === '[DONE]') {
-          if (onChunk) onChunk({ content: '', done: true });
-          finish(fullContent);
-          return;
-        }
-
-        try {
-          const parsed = JSON.parse(data);
-          const rawContent = parsed.choices?.[0]?.delta?.content;
-
-          if (rawContent) {
-            // Preserve token-leading whitespace. Filtering each token separately
-            // would trim spaces such as " info" before concatenation.
-            fullContent += rawContent;
-            const visibleContent = this.filterToolCallArtifacts(fullContent);
-
-            if (onChunk && visibleContent) {
-              onChunk({ content: visibleContent, done: false });
+          if (onChunk) {
+            const visible = this.filterToolCallArtifacts(fullText);
+            if (visible) {
+              onChunk({ content: visible, done: false });
             }
           }
-        } catch {
-          // A complete but invalid SSE event is ignored.
         }
-      };
 
-      stream.on('data', (chunk: Buffer) => {
-        sseBuffer += chunk.toString();
-        const lines = sseBuffer.split('\n');
-        sseBuffer = lines.pop() || '';
-
-        for (const line of lines) processSseLine(line);
-      });
-
-      stream.on('error', (error: any) => {
-        clearTimeout(timeoutId);
-        if (!resolved) {
-          resolved = true;
-          reject(new Error(error.message || 'Stream error'));
+        if (onChunk) {
+          onChunk({ content: '', done: true });
         }
-      });
 
-      stream.on('end', () => {
-        if (sseBuffer) processSseLine(sseBuffer);
-        finish(fullContent);
-      });
-    });
+        let cleaned = this.filterToolCallArtifacts(fullText);
+        if (!cleaned && fullText && containsToolCallArtifact(fullText)) {
+          cleaned = MALFORMED_TOOL_CALL_FALLBACK;
+        }
+
+        if (cleaned) {
+          messages.push({ role: 'assistant', content: cleaned });
+          this.conversationHistory.set(sessionId, messages);
+          this.setExpiry(sessionId);
+          return cleaned;
+        }
+
+        // Empty response on this attempt — only retry if tools were involved
+        // (model may need another round with tool results)
+        const hadTools = !!tools && Object.keys(tools).length > 0;
+        if (attempt < MAX_EMPTY_RETRIES && hadTools) {
+          console.warn(
+            `[AIService] ⚠️ Empty response (attempt ${attempt + 1}/${MAX_EMPTY_RETRIES + 1}). Retrying...`,
+          );
+          continue;
+        }
+
+        // All retries exhausted — throw so callers can translate to user-friendly message
+        const msg = hadTools
+          ? 'AI response empty after all retries (tools executed but model returned no text).'
+          : 'AI response empty after all retries (model returned no text content).';
+        throw new Error(msg);
+      } catch (error: unknown) {
+        const err = error as Error & {
+          response?: { data?: { error?: { message?: string } } };
+        };
+
+        // If it's not the last attempt, retry on transient errors
+        if (attempt < MAX_EMPTY_RETRIES) {
+          const msg = (err.message || '').toLowerCase();
+          const isTransient =
+            msg.includes('timeout') ||
+            msg.includes('econnrefused') ||
+            msg.includes('econnreset') ||
+            msg.includes('429') ||
+            msg.includes('rate limit') ||
+            msg.includes('too many') ||
+            msg.includes('server error') ||
+            msg.includes('503') ||
+            msg.includes('502');
+
+          if (isTransient) {
+            console.warn(
+              `[AIService] ⚠️ Transient error on attempt ${attempt + 1} (${err.message}). Retrying...`,
+            );
+            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+            continue;
+          }
+        }
+
+        console.error(
+          `[AIService] ${this.provider} API Error:`,
+          (err as unknown as Record<string, unknown>).response
+            ? (err as unknown as { response?: { data?: unknown } }).response?.data
+            : err.message,
+        );
+        throw new Error(
+          (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+            ?.message ||
+            err.message ||
+            'Failed to get AI response',
+        );
+      }
+    }
+
+    return '';
   }
+
+  // ────────────────────────────────────────────────────────────────
+  //  OLLAMA (raw axios — different API surface)
+  // ────────────────────────────────────────────────────────────────
 
   private async callOllamaNonStream(sessionId: string, messages: ChatMessage[]): Promise<string> {
     try {
-      const response = await axios.post<any>(
+      const response = await axios.post<{ message?: { content?: string } }>(
         `${this.baseUrl}/api/chat`,
-        {
-          model: this.model,
-          messages: messages,
-          stream: false,
-        },
+        { model: this.model, messages, stream: false },
         {
           headers: { 'Content-Type': 'application/json' },
           timeout: 60000,
-        }
+        },
       );
 
       const assistantMessage = response.data?.message?.content || '';
@@ -575,12 +433,11 @@ export class AIService {
       this.setExpiry(sessionId);
 
       return assistantMessage;
-    } catch (error: any) {
-      console.error('Ollama API Error:', error.response?.data || error.message);
+    } catch (error: unknown) {
+      const err = error as Error & { response?: { data?: { error?: string } } };
+      console.error('Ollama API Error:', err.response?.data || err.message);
       throw new Error(
-        error.response?.data?.error ||
-        error.message ||
-        'Failed to get AI response from Ollama'
+        err.response?.data?.error || err.message || 'Failed to get AI response from Ollama',
       );
     }
   }
@@ -588,31 +445,25 @@ export class AIService {
   private async callOllamaStream(
     sessionId: string,
     messages: ChatMessage[],
-    onChunk?: StreamCallback
+    onChunk?: StreamCallback,
   ): Promise<string> {
     try {
       const response = await axios.post(
         `${this.baseUrl}/api/chat`,
-        {
-          model: this.model,
-          messages: messages,
-          stream: true,
-        },
+        { model: this.model, messages, stream: true },
         {
           headers: { 'Content-Type': 'application/json' },
           timeout: 120000,
           responseType: 'stream',
-        }
+        },
       );
 
-      const stream = response.data;
-      return this.handleOllamaStream(sessionId, messages, stream, onChunk);
-    } catch (error: any) {
-      console.error('Ollama API Error:', error.response?.data || error.message);
+      return this.handleOllamaStream(sessionId, messages, response.data, onChunk);
+    } catch (error: unknown) {
+      const err = error as Error & { response?: { data?: { error?: string } } };
+      console.error('Ollama API Error:', err.response?.data || err.message);
       throw new Error(
-        error.response?.data?.error ||
-        error.message ||
-        'Failed to get AI response from Ollama'
+        err.response?.data?.error || err.message || 'Failed to get AI response from Ollama',
       );
     }
   }
@@ -620,8 +471,8 @@ export class AIService {
   private handleOllamaStream(
     sessionId: string,
     messages: ChatMessage[],
-    stream: any,
-    onChunk?: StreamCallback
+    stream: import('stream').Readable,
+    onChunk?: StreamCallback,
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       let fullContent = '';
@@ -634,7 +485,6 @@ export class AIService {
         resolved = true;
         clearTimeout(timeoutId);
 
-        // Final safety filter on the fully accumulated content
         let finalContent = this.filterToolCallArtifacts(content || '');
         if (!finalContent && content && containsToolCallArtifact(content)) {
           finalContent = MALFORMED_TOOL_CALL_FALLBACK;
@@ -672,7 +522,6 @@ export class AIService {
           if (content) {
             fullContent += content;
             const visibleContent = this.filterToolCallArtifacts(fullContent);
-
             if (onChunk && visibleContent) {
               onChunk({ content: visibleContent, done: false });
             }
@@ -683,7 +532,7 @@ export class AIService {
             finish(fullContent);
           }
         } catch {
-          // A complete but invalid JSON event is ignored.
+          // Invalid JSON event — ignored.
         }
       };
 
@@ -691,11 +540,10 @@ export class AIService {
         lineBuffer += chunk.toString();
         const lines = lineBuffer.split('\n');
         lineBuffer = lines.pop() || '';
-
         for (const line of lines) processJsonLine(line);
       });
 
-      stream.on('error', (error: any) => {
+      stream.on('error', (error: Error) => {
         clearTimeout(timeoutId);
         if (!resolved) {
           resolved = true;
@@ -710,18 +558,9 @@ export class AIService {
     });
   }
 
-  private getNotConfiguredMessage(): string {
-    switch (this.provider) {
-      case 'ollama':
-        return 'AI service is not configured. Please set OLLAMA_BASE_URL in .env';
-      case 'openai':
-        return 'AI service is not configured. Please set OPENAI_API_KEY (or AI_API_KEY) and OPENAI_BASE_URL (or AI_BASE_URL) in .env';
-      case 'other':
-        return 'AI service is not configured. Please set OTHER_BASE_URL and OTHER_API_KEY in .env';
-      default:
-        return 'AI service is not configured. Please set OPENROUTER_API_KEY (or AI_API_KEY) and OPENROUTER_BASE_URL (or AI_BASE_URL) in .env';
-    }
-  }
+  // ────────────────────────────────────────────────────────────────
+  //  CONVERSATION HISTORY
+  // ────────────────────────────────────────────────────────────────
 
   getConversationHistory(sessionId: string): ChatMessage[] {
     this.checkAndClearExpired(sessionId);
@@ -753,6 +592,10 @@ export class AIService {
     }
   }
 
+  // ────────────────────────────────────────────────────────────────
+  //  MODEL CONFIG
+  // ────────────────────────────────────────────────────────────────
+
   setModel(model: string): void {
     this.model = model;
   }
@@ -761,27 +604,41 @@ export class AIService {
     return this.model;
   }
 
-  /**
-   * Ambil daftar model untuk provider OpenAI-compatible (openai | openrouter | other).
-   * Untuk OpenRouter: coba fetch dari API OpenRouter, fallback ke hardcoded list.
-   * Untuk OpenAI / Other custom: coba fetch dari endpoint /models.
-   */
-  static async getAvailableModels(provider: Provider, baseUrl?: string, apiKey?: string): Promise<string[]> {
+  private getNotConfiguredMessage(): string {
+    switch (this.provider) {
+      case 'ollama':
+        return 'AI service is not configured. Please set OLLAMA_BASE_URL in .env';
+      case 'openai':
+        return 'AI service is not configured. Please set OPENAI_API_KEY (or AI_API_KEY) and OPENAI_BASE_URL (or AI_BASE_URL) in .env';
+      case 'other':
+        return 'AI service is not configured. Please set OTHER_BASE_URL and OTHER_API_KEY in .env';
+      default:
+        return 'AI service is not configured. Please set OPENROUTER_API_KEY (or AI_API_KEY) and OPENROUTER_BASE_URL (or AI_BASE_URL) in .env';
+    }
+  }
+
+  static async getAvailableModels(
+    provider: Provider,
+    baseUrl?: string,
+    apiKey?: string,
+  ): Promise<string[]> {
     if (provider === 'openrouter') {
-      // Coba fetch dari OpenRouter API
-      const url = (baseUrl || process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+      const url = (
+        baseUrl || process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'
+      ).replace(/\/+$/, '');
       const key = apiKey || process.env.OPENROUTER_API_KEY || '';
       if (key) {
         try {
-          const response = await axios.get<any>(`${url}/models`, {
-            headers: { 'Authorization': `Bearer ${key}` },
+          const response = await axios.get<{ data?: Array<{ id: string }> }>(`${url}/models`, {
+            headers: { Authorization: `Bearer ${key}` },
             timeout: 10000,
           });
           const models = response.data?.data || [];
-          if (models.length > 0) return models.map((m: any) => m.id).filter(Boolean);
-        } catch { /* fallback to hardcoded */ }
+          if (models.length > 0) return models.map((m) => m.id).filter(Boolean);
+        } catch {
+          /* fallback */
+        }
       }
-      // Fallback: hardcoded popular free models
       return [
         'qwen/qwen3-next-80b-a3b-instruct:free',
         'openrouter/owl-alpha',
@@ -792,24 +649,30 @@ export class AIService {
     }
 
     if (provider === 'openai' || provider === 'other') {
-      // Coba fetch dari endpoint /models dari API yg compatible
-      const defaultUrl = provider === 'openai'
-        ? (baseUrl || process.env.OPENAI_BASE_URL || process.env.AI_BASE_URL || 'https://api.openai.com/v1')
-        : (baseUrl || process.env.OTHER_BASE_URL || process.env.AI_BASE_URL || '');
-      const defaultKey = provider === 'openai'
-        ? (apiKey || process.env.OPENAI_API_KEY || process.env.AI_API_KEY || '')
-        : (apiKey || process.env.OTHER_API_KEY || process.env.AI_API_KEY || '');
+      const defaultUrl =
+        provider === 'openai'
+          ? (baseUrl ||
+              process.env.OPENAI_BASE_URL ||
+              process.env.AI_BASE_URL ||
+              'https://api.openai.com/v1')
+          : (baseUrl || process.env.OTHER_BASE_URL || process.env.AI_BASE_URL || '');
+      const defaultKey =
+        provider === 'openai'
+          ? (apiKey || process.env.OPENAI_API_KEY || process.env.AI_API_KEY || '')
+          : (apiKey || process.env.OTHER_API_KEY || process.env.AI_API_KEY || '');
       const url = defaultUrl.replace(/\/+$/, '');
       const key = defaultKey;
       if (key && url) {
         try {
-          const response = await axios.get<any>(`${url}/models`, {
-            headers: { 'Authorization': `Bearer ${key}` },
+          const response = await axios.get<{ data?: Array<{ id: string }> }>(`${url}/models`, {
+            headers: { Authorization: `Bearer ${key}` },
             timeout: 10000,
           });
           const models = response.data?.data || [];
-          if (models.length > 0) return models.map((m: any) => m.id).filter(Boolean);
-        } catch { /* return empty */ }
+          if (models.length > 0) return models.map((m) => m.id).filter(Boolean);
+        } catch {
+          /* return empty */
+        }
       }
       return [];
     }
@@ -817,10 +680,7 @@ export class AIService {
     return [];
   }
 
-  /**
-   * Fetch available models from OpenRouter API.
-   * @deprecated Use `getAvailableModels('openrouter')` instead.
-   */
+  /** @deprecated Use `getAvailableModels('openrouter')` instead. */
   static getAvailableOpenRouterModels(): string[] {
     return [
       'qwen/qwen3-next-80b-a3b-instruct:free',
@@ -832,13 +692,19 @@ export class AIService {
   }
 
   static async listOllamaModels(baseUrl?: string): Promise<string[]> {
-    const url = (baseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
+    const url = (baseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(
+      /\/$/,
+      '',
+    );
     try {
-      const response = await axios.get<any>(`${url}/api/tags`, { timeout: 10000 });
+      const response = await axios.get<{ models?: Array<{ name: string }> }>(`${url}/api/tags`, {
+        timeout: 10000,
+      });
       const models = response.data?.models || [];
-      return models.map((m: any) => m.name).filter(Boolean);
-    } catch (error: any) {
-      console.error('Failed to list Ollama models:', error.message);
+      return models.map((m) => m.name).filter(Boolean);
+    } catch (error: unknown) {
+      const err = error as Error;
+      console.error('Failed to list Ollama models:', err.message);
       return [];
     }
   }

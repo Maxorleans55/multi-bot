@@ -44,9 +44,9 @@ export const execute: ToolExecuteFunction = async (args, context) => {
   const count = typeof args.count === 'number' && args.count > 0
     ? Math.min(Math.floor(args.count), 10)
     : 1;
+console.log(`[Tool:Pinterest] 🔍 Searching: ${query} (count: ${count})`);
 
-  try {
-    // pinterest() already shuffles, but shuffle again locally for extra randomness
+try {
     const results = shuffleArray(await pinterest(query));
 
     if (results.length === 0) {

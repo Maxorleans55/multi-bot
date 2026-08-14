@@ -1,7 +1,7 @@
 # Bot-Baileys-AI — TODO.md
 
 > Task list dan development roadmap.
-> **Versi:** 1.1.0 | **Last Updated:** 25 Juni 2026
+> **Versi:** 1.1.0 | **Last Updated:** 3 Agustus 2026
 
 ---
 
@@ -35,6 +35,7 @@
 - [x] **DSML Tool Call Recovery** — Parse DSML/XML artifacts dari model tanpa native function calling
 - [x] **Tool Call Artifact Filter** — Strip residual XML/JSON/tool artifacts dari respons AI
 - [x] **'other' AI Provider Support** — Custom OpenAI-compatible API provider
+- [x] **AI SDK Migration** — Migrasi service & tools AI dari native ke `ai` & `@ai-sdk/openai-compatible`
 - [ ] **Conversation Export** — Export riwayat chat AI
 
 ### Media Download
@@ -107,6 +108,12 @@
 - [ ] **Context-Aware Conversations** — Remember user context across sessions
 - [ ] **AI Training/Finetuning** — Custom model fine-tuning
 - [ ] **More AI Tools** — Weather, calendar, calculators, etc.
+
+## 🔄 Recent Changes (3 Agustus 2026)
+
+| Perubahan | Files | Status |
+|-----------|-------|--------|
+| **AI SDK Migration** — Migrasi AI service & tools dari native ke `ai` & `@ai-sdk/openai-compatible` | [`src/services/aiService.ts`](src/services/aiService.ts), [`src/tools/`](src/tools/), [`src/services/systemPrompt.ts`](src/services/systemPrompt.ts) | ✅ Done |
 
 ## 🔄 Recent Changes (25 Juni 2026)
 

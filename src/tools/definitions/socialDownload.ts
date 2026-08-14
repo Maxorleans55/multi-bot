@@ -291,6 +291,8 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     return { success: false, message: 'URL tidak diberikan.' };
   }
 
+  console.log(`[Tool:Social] 📥 Downloading: ${url}`);
+
   const platform = detectPlatform(url);
   if (!platform) {
     return {

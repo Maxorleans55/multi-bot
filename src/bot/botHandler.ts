@@ -537,7 +537,7 @@ export class BotHandler {
 
           if ((isBotMentioned || isReplyToBot || isCalled || tagAll) && isAIGroupEnabled(from)) {
             // ── Daily limit: group AI ─────────────────────────────────
-            if (user_id && premiumService.isGroupAiLimitEnabled()) {
+            if (user_id && !isOwner(user_id) && premiumService.isGroupAiLimitEnabled()) {
               const groupAiCheck = await premiumService.checkGroupAiLimit(user_id);
               if (!groupAiCheck.allowed) {
                 const tierMsg = groupAiCheck.tier !== 'free'
@@ -575,7 +575,7 @@ export class BotHandler {
           const aiEnabled = isAIModeEnabled(targetUserId) || await isAIModeEnabledAsync(targetUserId);
           if (aiEnabled && body) {
             // ── Daily limit: private AI ──────────────────────────────
-            if (user_id && premiumService.isPrivateAiLimitEnabled()) {
+            if (user_id && !isOwner(user_id) && premiumService.isPrivateAiLimitEnabled()) {
               const privateAiCheck = await premiumService.checkPrivateAiLimit(user_id);
               if (!privateAiCheck.allowed) {
                 const tierMsg = privateAiCheck.tier !== 'free'
@@ -668,7 +668,7 @@ export class BotHandler {
         }
 
         // Premium daily limit check (only for commands that opt-in with limitEnabled: true)
-        if (cmdConfig?.limitEnabled === true && premiumService.isCommandLimitEnabled()) {
+        if (cmdConfig?.limitEnabled === true && !isOwner(effectiveUserId) && premiumService.isCommandLimitEnabled()) {
           const limitCheck = await premiumService.checkCommandLimit(effectiveUserId);
           if (!limitCheck.allowed) {
             log.info(`[${this.sessionId}] 🚫 Premium command limit reached for "${command}" by ${effectiveUserId.split('@')[0]} (tier: ${limitCheck.tier})`);
@@ -792,8 +792,7 @@ export class BotHandler {
       const safeResponse = stripToolCallArtifacts(fullResponse);
 
       if (!safeResponse || safeResponse.trim().length === 0) {
-        log.warn(`[${this.sessionId}] ⚠️ Empty AI response for group auto-reply, skipping`);
-        return;
+        throw new Error('AI response empty after all retries (model returned no text content).');
       }
 
       const quotedMessageObj = proto.WebMessageInfo.fromObject({
@@ -804,25 +803,27 @@ export class BotHandler {
           participant: simplified.participant || simplified.user_id,
         },
         message: originalMessage.message as proto.IMessage,
-      });
+      }) as WAMessage;
 
       await this.socket.sendMessage(to, {
         text: safeResponse,
       }, { quoted: quotedMessageObj });
     } catch (error: any) {
-      // Differentiate between network errors, AI errors, and unknown errors
       const errorMessage = error?.message?.toLowerCase() || '';
       let userFriendlyMessage: string;
 
-      if (errorMessage.includes('timeout') || errorMessage.includes('timedout') || errorMessage.includes('econnrefused')) {
-        userFriendlyMessage = '❌ Layanan AI sedang sibuk. Silakan coba lagi.';
+      if (errorMessage.includes('empty after all retries') || errorMessage.includes('empty response')) {
+        userFriendlyMessage = '❌ Ga bisa jawab itu, coba kata-kata lain deh.';
+        log.error(`[${this.sessionId}] ❌ AI empty response (group):`, error as object);
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('timedout') || errorMessage.includes('econnrefused')) {
+        userFriendlyMessage = '❌ Layanan AI lagi rame. Coba sebentar lagi ya.';
       } else if (errorMessage.includes('api key') || errorMessage.includes('unauthorized') || errorMessage.includes('401')) {
         userFriendlyMessage = '❌ Konfigurasi AI salah. Hubungi owner.';
         log.error(`[${this.sessionId}] ❌ AI Configuration error:`, error as object);
       } else if (errorMessage.includes('rate limit') || errorMessage.includes('429') || errorMessage.includes('too many')) {
-        userFriendlyMessage = '❌ Terlalu banyak permintaan. Silakan tunggu sebentar.';
+        userFriendlyMessage = '❌ Kebanyakan yang nanya. Tunggu bentar ya.';
       } else {
-        userFriendlyMessage = '❌ Maaf, ada masalah. Server sedang sibuk, coba lagi sebentar.';
+        userFriendlyMessage = '❌ Lagi error nih, coba lagi bentar.';
         log.error(`[${this.sessionId}] ❌ Group Auto-Reply Error:`, error as object);
       }
 
@@ -881,8 +882,7 @@ export class BotHandler {
       const safeResponse = stripToolCallArtifacts(fullResponse);
 
       if (!safeResponse || safeResponse.trim().length === 0) {
-        log.warn(`[${this.sessionId}] ⚠️ Empty AI response, skipping`);
-        return;
+        throw new Error('AI response empty after all retries (model returned no text content).');
       }
 
       const quotedMessageObj = proto.WebMessageInfo.fromObject({
@@ -893,25 +893,27 @@ export class BotHandler {
           participant: simplified.participant || simplified.user_id,
         },
         message: originalMessage.message as proto.IMessage,
-      });
+      }) as WAMessage;
 
       await this.socket.sendMessage(to, {
         text: safeResponse,
       }, { quoted: quotedMessageObj });
     } catch (error: any) {
-      // Differentiate error types for appropriate user feedback
       const errorMessage = error?.message?.toLowerCase() || '';
       let userFriendlyMessage: string;
 
-      if (errorMessage.includes('timeout') || errorMessage.includes('timedout') || errorMessage.includes('econnrefused')) {
-        userFriendlyMessage = '❌ Layanan AI sedang sibuk. Silakan coba lagi.';
+      if (errorMessage.includes('empty after all retries') || errorMessage.includes('empty response')) {
+        userFriendlyMessage = '❌ Maaf, saat ini tidak dapat memproses permintaan yang diinginkan. Silakan coba lagi nanti.';
+        log.error(`[${this.sessionId}] ❌ AI empty response:`, error as object);
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('timedout') || errorMessage.includes('econnrefused')) {
+        userFriendlyMessage = '❌ Maaf, layanan AI sedang sibuk. Silakan coba lagi nanti.';
       } else if (errorMessage.includes('api key') || errorMessage.includes('unauthorized') || errorMessage.includes('401')) {
-        userFriendlyMessage = '❌ Konfigurasi AI salah. Hubungi owner.';
+        userFriendlyMessage = '❌ Maaf, terjadi kesalahan konfigurasi AI. Mohon hubungi owner.';
         log.error(`[${this.sessionId}] ❌ AI Configuration error:`, error as object);
       } else if (errorMessage.includes('rate limit') || errorMessage.includes('429') || errorMessage.includes('too many')) {
-        userFriendlyMessage = '❌ Terlalu banyak permintaan. Silakan tunggu sebentar.';
+        userFriendlyMessage = '❌ Maaf, permintaan terlalu banyak. Silakan tunggu sebentar dan coba lagi.';
       } else {
-        userFriendlyMessage = '❌ Terjadi kesalahan AI. Silakan coba lagi.';
+        userFriendlyMessage = '❌ Maaf, sedang terjadi kendala teknis. Silakan coba lagi nanti.';
         log.error(`[${this.sessionId}] ❌ AI Error:`, error as object);
       }
 

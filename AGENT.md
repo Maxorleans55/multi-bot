@@ -28,7 +28,9 @@ Bot-Baileys-AI is a **multi-session WhatsApp bot** built on [Baileys](https://gi
 | Language | **TypeScript 7** with `strict: true` |
 | WhatsApp | [`@innovatorssoft/baileys`](https://github.com/innovatorssoft/baileys) (fork with button support) |
 | Database | **MongoDB** via **Prisma ORM** (see [`prisma/schema.prisma`](prisma/schema.prisma)) |
-| AI | OpenAI-compatible API (supports OpenAI, OpenRouter, Ollama, and custom providers) |
+| AI | OpenAI-compatible API via [AI SDK](https://sdk.vercel.ai) (`ai` + [`@ai-sdk/openai-compatible`](https://sdk.vercel.ai/providers/ai-sdk-providers/openai-compatible)) — supports OpenAI, OpenRouter, Ollama, and custom providers |
+| AI Client | [`ai`](https://www.npmjs.com/package/ai) v7 (Vercel AI SDK) — `generateText`, `streamText`, `dynamicTool` |
+| AI Provider | [`@ai-sdk/openai-compatible`](https://www.npmjs.com/package/@ai-sdk/openai-compatible) — `createOpenAICompatible()` |
 | Media DL | [`nexo-aio-downloader`](https://github.com/Stazyu/nexo-aio-downloader), [`@tobyg74/tiktok-api-dl`](https://github.com/tobyg74/tiktok-api-dl) |
 | Stickers | [`wa-sticker-formatter`](https://github.com/rashidomar/wa-sticker-formatter), `gallery-dl` (Python CLI) |
 | Web | **Vue 3** + Vite + TypeScript + Pinia + Vue Router |
@@ -183,19 +185,19 @@ The bot supports 4 AI provider modes, configured via `AI_PROVIDER` env var:
 User message → aiService.chatWithTools()
     │
     ├─ Build messages array (system prompt + conversation history + user message)
-    ├─ Attach tool definitions from ToolRegistry
+    ├─ Convert ToolRegistry entries → AI SDK dynamicTool() definitions
     │
-    ├─ callOpenAIWithTools() — non-streaming with tools
+    ├─ streamText() via AI SDK (with tools, maxSteps: 4)
     │   │
-    │   ├─ If response has tool_calls → execute each via toolRegistry
-    │   │   └─ Send tool results back to AI → get final response
+    │   ├─ AI SDK handles the tool-calling loop automatically:
+    │   │   ├─ Stream text to user
+    │   │   ├─ If AI returns tool_calls → execute via ToolRegistry
+    │   │   ├─ Feed tool results back to AI
+    │   │   └─ Continue until no more tool calls or maxSteps reached
     │   │
-    │   ├─ If response is DSML text (legacy models) → parseDsmlToolCalls()
-    │   │   └─ Execute tools & follow up
-    │   │
-    │   └─ If response is normal text → filter artifacts, emit via onChunk
+    │   └─ Final response streamed via textStream → onChunk callback
     │
-    └─ Loop up to MAX_TOOL_ROUNDS (4) for multi-tool chains (web_search → web_fetch)
+    └─ Tool results are filtered for artifacts before sending to user
 ```
 
 ### 5.3 Conversation History
