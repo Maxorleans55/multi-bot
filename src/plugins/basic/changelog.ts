@@ -18,6 +18,40 @@ const changelogCommand: CommandModule = {
 ┃   _Apa yang baru?_
 ╰━━━━━━━━━━━━━━━━━━╯
 
+📅 *14 Agustus 2026*
+
+╭━━━━━「 🧠 *AI Lebih Cepat* 」━━━━━╮
+┃
+┃ • *Feat:* Mesin AI baru — respons
+┃   lebih cepat & stabil.
+┃
+┃ • *Fix:* Pencarian web & baca
+┃   halaman nggak gampang gagal lagi.
+┃
+╰━━━━━━━━━━━━━━━━━━╯
+
+╭━━━━━「 📸 *Instagram Fix* 」━━━━━╮
+┃
+┃ • *Fix:* Video yang gagal di upload ke story whatsapp (codec nggak cocok
+┃   WhatsApp) sekarang aman.
+┃
+┃ • *Fix:* Kalau download gagal, ada
+┃   pesan error yang jelas.
+┃
+╰━━━━━━━━━━━━━━━━━━╯
+
+📅 *25 Juli 2026*
+
+╭━━━━━「 💎 *Sistem Premium* 」━━━━━╮
+┃
+┃ • *Feat:* Tier baru — *free*,
+┃   *premium*, & *pro*.
+┃
+┃ • *Feat:* Batas pemakaian AI &
+┃   command per hari per user.
+┃
+╰━━━━━━━━━━━━━━━━━━╯
+
 📅 *30 Juni 2026*
 
 ╭━━━「 📸 *Instagram Download* 」━━━╮
