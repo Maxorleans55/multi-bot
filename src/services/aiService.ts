@@ -2,7 +2,7 @@ import axios from 'axios';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { generateText, streamText, dynamicTool, isStepCount, type ModelMessage } from 'ai';
 import toolRegistry from '../tools/toolRegistry.js';
-import type { ToolContext } from '../types/tools.js';
+import type { ToolContext, ToolExecuteResult } from '../types/tools.js';
 import {
   containsToolCallArtifact,
   stripToolCallArtifacts,
@@ -120,13 +120,48 @@ export class AIService {
   private buildAISDKTools(toolContext?: ToolContext): Record<string, AISdkTool> {
     const tools: Record<string, AISdkTool> = {};
 
+    // Per-turn dedup: prevents the model from re-executing a tool with the
+    // exact same arguments within one turn. Models sometimes re-issue the
+    // same call (e.g. download_youtube) — executing it again would duplicate
+    // downloads. The previous result is returned instead so the model can
+    // produce its final answer.
+    const executedCalls = new Map<string, ToolExecuteResult>();
+
+    const normalizeArgs = (args: unknown): string => {
+      try {
+        return JSON.stringify(args, (_key, value) =>
+          typeof value === 'string' ? value.toLowerCase().trim() : value,
+        );
+      } catch {
+        return JSON.stringify(args);
+      }
+    };
+
     for (const [name, entry] of toolRegistry.entries()) {
 
       const toolDef = {
         description: entry.definition.function.description,
         parameters: entry.definition.function.parameters,
         execute: async (args: unknown) => {
+          const key = `${name}:${normalizeArgs(args)}`;
+          const previous = executedCalls.get(key);
+          if (previous) {
+            console.warn(`[AIService] ⛔ Duplicate tool call skipped: ${key}`);
+            return {
+              success: true,
+              message:
+                'Permintaan ini sudah diproses sebelumnya dengan hasil yang sama. Jangan memanggil tool yang sama berulang kali — langsung berikan jawaban final.',
+              data: previous.data,
+            };
+          }
           const result = await entry.execute(args as Record<string, unknown>, toolContext || {});
+          // Only remember SUCCESSFUL executions. A failed tool call must be
+          // allowed to run again — the model often re-calls it with corrected
+          // arguments (e.g. after it omitted `query`). Remembering failures
+          // would wrongly block the retry as a "duplicate".
+          if (result && result.success === true) {
+            executedCalls.set(key, result);
+          }
           return result;
         },
       } as Record<string, unknown>;
@@ -350,21 +385,26 @@ export class AIService {
           return cleaned;
         }
 
-        // Empty response on this attempt — only retry if tools were involved
-        // (model may need another round with tool results)
         const hadTools = !!tools && Object.keys(tools).length > 0;
-        if (attempt < MAX_EMPTY_RETRIES && hadTools) {
+        // NEVER retry an empty response when tools were involved: the AI SDK
+        // already ran the full tool-calling loop internally (maxSteps). A retry
+        // here re-sends the same user message and re-executes the same tools,
+        // which caused duplicate downloads / repeated tool calls.
+        if (hadTools) {
+          throw new Error(
+            'AI response empty after all retries (tools executed but model returned no text).',
+          );
+        }
+
+        // No tools: retry empty responses up to MAX_EMPTY_RETRIES.
+        if (attempt < MAX_EMPTY_RETRIES) {
           console.warn(
             `[AIService] ⚠️ Empty response (attempt ${attempt + 1}/${MAX_EMPTY_RETRIES + 1}). Retrying...`,
           );
           continue;
         }
 
-        // All retries exhausted — throw so callers can translate to user-friendly message
-        const msg = hadTools
-          ? 'AI response empty after all retries (tools executed but model returned no text).'
-          : 'AI response empty after all retries (model returned no text content).';
-        throw new Error(msg);
+        throw new Error('AI response empty after all retries (model returned no text content).');
       } catch (error: unknown) {
         const err = error as Error & {
           response?: { data?: { error?: { message?: string } } };

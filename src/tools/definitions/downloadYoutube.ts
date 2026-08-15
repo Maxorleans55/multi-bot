@@ -1,6 +1,12 @@
-import type { AIToolDefinition, ToolExecuteFunction } from '../../types/tools.js';
+import type {
+  AIToolDefinition,
+  ToolExecuteFunction,
+  ToolExecuteResult,
+  ToolContext,
+} from '../../types/tools.js';
 import path from 'path';
 import { promises as fs } from 'fs';
+import { log } from '../../utils/logger.js';
 
 interface YoutubeDlInfo {
   id?: string;
@@ -104,36 +110,200 @@ const hasDocumentIntent = (userMessage: string): boolean =>
 const hasAudioIntent = (userMessage: string): boolean =>
   WANTS_AUDIO_PATTERN.test(userMessage);
 
-export const execute: ToolExecuteFunction = async (args, context) => {
-  const input = (args.query as string | undefined)?.trim();
-  if (!input) {
-    return { success: false, message: 'URL atau judul YouTube tidak diberikan.' };
+// ─────────────────────────────────────────────────────────────
+//  DUPLICATE DOWNLOAD GUARD
+// ─────────────────────────────────────────────────────────────
+// Some models re-issue download_youtube with slightly different
+// phrasings of the same song title within one turn (or minutes apart).
+// Without a guard, the same song gets downloaded and sent 2-3x.
+// This keeps a short per-session memory of successful downloads and
+// short-circuits near-identical queries.
+
+interface RecentDownload {
+  sessionKey: string;
+  query: string;
+  format: string;
+  asDocument: boolean;
+  result: ToolExecuteResult;
+  at: number;
+}
+
+const recentDownloads = new Map<string, RecentDownload>();
+const DEDUP_WINDOW_MS = 10 * 60 * 1000;
+const MAX_RECENT_ENTRIES = 200;
+const JACCARD_THRESHOLD = 0.6;
+const MIN_WORDS_FOR_CONTAINED = 2;
+const TEMP_FILE_CLEANUP_MS = 30 * 1000;
+
+const QUERY_STOPWORDS = new Set([
+  'official', 'audio', 'video', 'lyrics', 'lyric', 'lagu', 'song', 'mp3',
+  'full', 'the', 'and', 'of', 'feat', 'ft', 'remix', 'cover', 'live',
+  'karaoke', 'hd', 'download', 'youtube', 'music', 'musik', 'terbaru',
+]);
+
+/** Normalize a query into meaningful keywords (lowercase, no stopwords). */
+function normalizeQuery(query: string): string[] {
+  return query
+    .toLowerCase()
+    .replace(/["'`]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((w) => !QUERY_STOPWORDS.has(w));
+}
+
+/** Jaccard similarity between two keyword sets (0..1). */
+function jaccard(a: string[], b: string[]): number {
+  if (a.length === 0 || b.length === 0) return 0;
+  const setA = new Set(a);
+  const setB = new Set(b);
+  const union = new Set([...setA, ...setB]);
+  let intersection = 0;
+  for (const w of setA) {
+    if (setB.has(w)) intersection++;
+  }
+  return intersection / union.size;
+}
+
+/** Stable key for a session + normalized query + format + document flag. */
+function getDedupKey(
+  sessionKey: string,
+  query: string,
+  format: string,
+  asDocument: boolean,
+): string {
+  return `${sessionKey}\u0000${normalizeQuery(query).join(' ')}\u0000${format}\u0000${asDocument}`;
+}
+
+/**
+ * Find a recent successful download for the same session that is a
+ * near-duplicate. Pass `format: null` to match any format (used to inherit
+ * the format of a previous download when the model omitted it).
+ */
+function findRecentDownload(
+  sessionKey: string,
+  query: string,
+  format: string | null,
+  asDocument: boolean,
+): RecentDownload | null {
+  const words = normalizeQuery(query);
+  const now = Date.now();
+
+  for (const [key, rec] of recentDownloads) {
+    if (now - rec.at > DEDUP_WINDOW_MS) {
+      recentDownloads.delete(key);
+      continue;
+    }
+    if (rec.sessionKey !== sessionKey || rec.asDocument !== asDocument) continue;
+    if (format !== null && rec.format !== format) continue;
+
+    const recWords = normalizeQuery(rec.query);
+    const sameWords =
+      words.length > 0 && words.join(' ') === recWords.join(' ');
+    const highOverlap = jaccard(words, recWords) >= JACCARD_THRESHOLD;
+    const contained =
+      (words.length >= MIN_WORDS_FOR_CONTAINED && words.every((w) => recWords.includes(w))) ||
+      (recWords.length >= MIN_WORDS_FOR_CONTAINED && recWords.every((w) => words.includes(w)));
+
+    if (sameWords || highOverlap || contained) return rec;
   }
 
-  const rawUserMessage = typeof context.userMessage === 'string' ? context.userMessage : '';
+  return null;
+}
 
-  const format = (args.format as string) || 'video';
-  const quality = (args.quality as string) || 'best';
+/** Return the most recent successful download for a session (any format). */
+function findLatestDownload(sessionKey: string): RecentDownload | null {
+  let latest: RecentDownload | null = null;
+  const now = Date.now();
 
-  // Fallback #1: if the model missed `as_document` but the user explicitly
-  // asked for a document/file, force document mode.
-  let asDocument = args.as_document === true;
-  if (!asDocument && hasDocumentIntent(rawUserMessage)) {
-    asDocument = true;
+  for (const [key, rec] of recentDownloads) {
+    if (now - rec.at > DEDUP_WINDOW_MS) {
+      recentDownloads.delete(key);
+      continue;
+    }
+    if (rec.sessionKey !== sessionKey) continue;
+    if (latest === null || rec.at > latest.at) latest = rec;
   }
 
-  // Fallback #2: if the model picked "video" but the user asked for a song,
-  // force audio mode (prevents a song from arriving as a video).
-  const resolvedFormat =
-    format === 'video' && hasAudioIntent(rawUserMessage) ? 'audio' : format;
+  return latest;
+}
 
-  if (rawUserMessage) {
-    console.log(
-      `[Tool:YouTube] 🧭 Intent fallback: "${rawUserMessage}" → format=${resolvedFormat}${asDocument ? ', asDocument' : ''}`,
+/** Prune expired entries and cap the map size so it cannot grow unbounded. */
+function pruneRecentDownloads(now: number): void {
+  for (const [key, rec] of recentDownloads) {
+    if (now - rec.at > DEDUP_WINDOW_MS) recentDownloads.delete(key);
+  }
+
+  while (recentDownloads.size >= MAX_RECENT_ENTRIES) {
+    let oldestKey: string | null = null;
+    let oldestAt = Infinity;
+    for (const [key, rec] of recentDownloads) {
+      if (rec.at < oldestAt) {
+        oldestAt = rec.at;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey === null) break;
+    recentDownloads.delete(oldestKey);
+  }
+}
+
+function rememberDownload(
+  sessionKey: string,
+  query: string,
+  format: string,
+  asDocument: boolean,
+  result: ToolExecuteResult,
+): void {
+  const now = Date.now();
+  pruneRecentDownloads(now);
+  recentDownloads.set(getDedupKey(sessionKey, query, format, asDocument), {
+    sessionKey,
+    query,
+    format,
+    asDocument,
+    result,
+    at: now,
+  });
+}
+
+// In-flight single-flight lock: AI SDK may execute several tool calls in
+// parallel (Promise.all). Without this, two near-identical queries could both
+// pass the dedup check before either finishes and is remembered.
+const inflight = new Map<string, Promise<ToolExecuteResult>>();
+
+/** Inputs to a download run, grouped to avoid long positional parameter lists. */
+interface DownloadParams {
+  input: string;
+  rawUserMessage: string;
+  format: string;
+  quality: string;
+  asDocument: boolean;
+  sessionKey: string;
+  context: ToolContext;
+}
+
+/**
+ * Core download logic. Extracted from the `execute` wrapper so the wrapper
+ * can apply single-flight dedup and the recent-download guard.
+ */
+async function doDownloadYoutube(params: DownloadParams): Promise<ToolExecuteResult> {
+  const { input, rawUserMessage, format, quality, asDocument, sessionKey, context } = params;
+
+  const duplicate = findRecentDownload(sessionKey, input, format, asDocument);
+  if (duplicate) {
+    log.warn(
+      `[Tool:YouTube] ⏭️ Duplicate query for "${sessionKey}": "${input}" → reusing "${duplicate.query}" (no re-download)`,
     );
+    return {
+      ...duplicate.result,
+      message: `Sudah didownload sebelumnya ("${duplicate.query}"). ${duplicate.result.message}`,
+    };
   }
 
-  console.log(`[Tool:YouTube] 🎥 Downloading: ${input} (format: ${resolvedFormat}, quality: ${quality}${asDocument ? ', asDocument' : ''})`);
+  log.info(
+    `[Tool:YouTube] 🎥 Downloading: ${input} (format: ${format}, quality: ${quality}${asDocument ? ', asDocument' : ''})`,
+  );
 
   try {
     const { youtubeDl } = await import('youtube-dl-exec');
@@ -170,7 +340,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
       output: path.join(tempDir, `${info.id || 'video'}.%(ext)s`),
     };
 
-    if (resolvedFormat === 'audio') {
+    if (format === 'audio') {
       downloadFlags.extractAudio = true;
       downloadFlags.audioFormat = 'mp3';
       downloadFlags.audioQuality = 0;
@@ -185,7 +355,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
 
     await youtubeDl(resolvedUrl, downloadFlags, { cwd: tempDir });
 
-    const ext = resolvedFormat === 'audio' ? 'mp3' : 'mp4';
+    const ext = format === 'audio' ? 'mp3' : 'mp4';
     const filePath = path.join(tempDir, `${info.id || 'video'}.${ext}`);
     const stats = await fs.stat(filePath);
 
@@ -202,7 +372,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     }
 
     if (context.socket && context.fromJid) {
-      const caption = `🎥 YouTube ${resolvedFormat === 'audio' ? 'Audio' : 'Video'}\n\n` +
+      const caption = `🎥 YouTube ${format === 'audio' ? 'Audio' : 'Video'}\n\n` +
         `📌 ${title}\n` +
         `👤 ${uploader}\n` +
         `⏱️ ${durationStr}\n` +
@@ -214,11 +384,11 @@ export const execute: ToolExecuteFunction = async (args, context) => {
         // Send as document for files up to 2GB
         await context.socket.sendMessage(context.fromJid, {
           document: { url: filePath },
-          mimetype: resolvedFormat === 'audio' ? 'audio/mpeg' : 'video/mp4',
+          mimetype: format === 'audio' ? 'audio/mpeg' : 'video/mp4',
           fileName: `${title}.${ext}`,
           caption,
         });
-      } else if (resolvedFormat === 'audio') {
+      } else if (format === 'audio') {
         await context.socket.sendMessage(context.fromJid, {
           audio: { url: filePath },
           mimetype: 'audio/mpeg',
@@ -231,23 +401,29 @@ export const execute: ToolExecuteFunction = async (args, context) => {
         });
       }
 
-      // Clean up after 30s
+      // Clean up temp file after the WhatsApp upload window has passed.
       setTimeout(async () => {
         try { await fs.unlink(filePath); } catch {}
-      }, 30000);
+      }, TEMP_FILE_CLEANUP_MS);
     }
 
-    return {
+    const result: ToolExecuteResult = {
       success: true,
-      message: `Berhasil mendownload ${resolvedFormat === 'audio' ? 'audio' : 'video'} YouTube "${title}". Media sudah dikirim ke user.`,
-      data: { title, uploader, duration: durationStr, format: resolvedFormat, quality, fileSize: stats.size, asDocument, resolvedUrl },
+      message: `Berhasil mendownload ${format === 'audio' ? 'audio' : 'video'} YouTube "${title}". Media sudah dikirim ke user.`,
+      data: { title, uploader, duration: durationStr, format, quality, fileSize: stats.size, asDocument, resolvedUrl },
     };
-  } catch (error: any) {
-    console.error('[Tool:YouTube] Download error:', error);
-    let errorMessage = 'Gagal mendownload dari YouTube.';
 
-    if (error?.stderr) {
-      const stderr = error.stderr as string;
+    rememberDownload(sessionKey, input, format, asDocument, result);
+
+    return result;
+  } catch (error: unknown) {
+    log.error('[Tool:YouTube] Download error:', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    let errorMessage = 'Gagal mendownload dari YouTube.';
+    if (typeof error === 'object' && error !== null && 'stderr' in error) {
+      const stderr = String((error as { stderr?: unknown }).stderr ?? '');
       if (stderr.includes('Video unavailable')) errorMessage = 'Video tidak tersedia atau telah dihapus.';
       else if (stderr.includes('Private video')) errorMessage = 'Video ini bersifat privat.';
       else if (stderr.includes('not available')) errorMessage = 'Video tidak tersedia di wilayah ini.';
@@ -258,4 +434,96 @@ export const execute: ToolExecuteFunction = async (args, context) => {
       message: errorMessage,
     };
   }
+}
+
+export const execute: ToolExecuteFunction = async (args, context) => {
+  const sessionKey = context.sessionId || context.fromJid || 'global';
+
+  let input = (args.query as string | undefined)?.trim();
+
+  // Query recovery: follow-up requests like "versi dokumennya juga dong"
+  // often omit `query` because the model assumes context. If empty, reuse the
+  // most recent successful download query for this session so the request
+  // still works instead of failing on a missing query.
+  if (!input) {
+    const latest = findLatestDownload(sessionKey);
+    if (latest) {
+      log.warn(
+        `[Tool:YouTube] 🔁 Query kosong → memakai judul terakhir "${latest.query}" dari sesi ini`,
+      );
+      input = latest.query;
+    }
+  }
+
+  if (!input) {
+    log.warn('[Tool:YouTube] ❌ download_youtube dipanggil tanpa `query`. Memberi tahu model untuk menyertakan judul/URL.');
+    return {
+      success: false,
+      message:
+        'Argumen `query` kosong. download_youtube membutuhkan judul lagu atau URL YouTube. Panggil ulang dengan menyertakan `query` (dan `format`: "audio" untuk lagu, as_document: true jika diminta sebagai dokumen).',
+    };
+  }
+
+  const rawUserMessage = typeof context.userMessage === 'string' ? context.userMessage : '';
+
+  const explicitFormat = args.format as string | undefined;
+  const format = explicitFormat || 'video';
+  const quality = (args.quality as string) || 'best';
+
+  // Fallback #1: if the model missed `as_document` but the user explicitly
+  // asked for a document/file, force document mode.
+  let asDocument = args.as_document === true;
+  if (!asDocument && hasDocumentIntent(rawUserMessage)) {
+    asDocument = true;
+  }
+
+  // Fallback #2: if the model picked "video" but the user asked for a song,
+  // force audio mode (prevents a song from arriving as a video).
+  let resolvedFormat =
+    format === 'video' && hasAudioIntent(rawUserMessage) ? 'audio' : format;
+
+  // Format inheritance: follow-up requests (e.g. "versi dokumennya juga dong")
+  // often omit `format`, which would silently default to "video" for a song
+  // that was previously downloaded as audio. If the same song was downloaded
+  // in this session before, reuse its format.
+  if (!explicitFormat && resolvedFormat === 'video') {
+    const prev = findRecentDownload(sessionKey, input, null, asDocument);
+    if (prev && prev.format !== 'video') {
+      log.info(
+        `[Tool:YouTube] 🧭 Inheriting format "${prev.format}" from previous download of "${prev.query}"`,
+      );
+      resolvedFormat = prev.format;
+    }
+  }
+
+  // In-flight dedup: if the exact same normalized query is already being
+  // downloaded for this session, await that same promise instead of starting
+  // a second download (parallel tool calls would otherwise race past the
+  // recent-download check below).
+  const inflightKey = getDedupKey(sessionKey, input, resolvedFormat, asDocument);
+  const existing = inflight.get(inflightKey);
+  if (existing) {
+    log.warn(
+      `[Tool:YouTube] ⏭️ In-flight duplicate for "${sessionKey}": "${input}" → awaiting existing download`,
+    );
+    return existing;
+  }
+
+  const run = doDownloadYoutube({
+    input,
+    rawUserMessage,
+    format: resolvedFormat,
+    quality,
+    asDocument,
+    sessionKey,
+    context,
+  });
+
+  // Only one in-flight per normalized query per session; clean up when done.
+  inflight.set(inflightKey, run);
+  run.finally(() => {
+    if (inflight.get(inflightKey) === run) inflight.delete(inflightKey);
+  }).catch(() => {});
+
+  return run;
 };
