@@ -17,6 +17,9 @@ importers:
       '@prisma/client':
         specifier: ^6.4.0
         version: 6.19.3(prisma@6.19.3(typescript@7.0.2))(typescript@7.0.2)
+      '@stazyu/baileys':
+        specifier: ^0.2.0
+        version: 0.2.0(audio-decode@2.2.3)(link-preview-js@3.0.0)(sharp@0.35.3(@types/node@22.19.17))(supports-color@7.2.0)
       '@tobyg74/tiktok-api-dl':
         specifier: ^1.3.7
         version: 1.3.7(@types/node@22.19.17)(canvas@3.2.3)(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
@@ -26,9 +29,6 @@ importers:
       axios:
         specifier: ^1.19.0
         version: 1.19.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
-      baileys:
-        specifier: npm:@stazyu/baileys
-        version: '@stazyu/baileys@0.1.0(audio-decode@2.2.3)(link-preview-js@3.0.0)(sharp@0.35.3(@types/node@22.19.17))(supports-color@7.2.0)'
       cheerio:
         specifier: ^1.2.0
         version: 1.2.0
@@ -738,8 +738,8 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@stazyu/baileys@0.1.0':
-    resolution: {integrity: sha512-ZN2ZIahtobOqHb2hp7lBBsD1dLxfOLlPiA8H73BUHgFtzHS4uy6zdrCa8wsVeTjXBOs4Bsv760vBylW+gIVU5Q==}
+  '@stazyu/baileys@0.2.0':
+    resolution: {integrity: sha512-YqQa4T/XMEiYzIjHaQjuHCOZoQpHHMXaHopVevhcG7aM607+CqfCADtqkklnIPeVU9qBlmxBvPqIHbJ04iiRig==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       audio-decode: ^2.1.3
@@ -1376,6 +1376,9 @@ packages:
 
   fast-safe-stringify@2.1.1:
     resolution: {integrity: sha512-W+KJc2dmILlPplD/H4K9l9LcAHAfPtP6BY84uVLXQ6Evcz9Lcg33Y2z1IVblT6xdY54PXYVHEv+0Wpq8Io6zkA==}
+
+  fflate@0.8.2:
+    resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
 
   ffmpeg-static@5.3.0:
     resolution: {integrity: sha512-H+K6sW6TiIX6VGend0KQwthe+kaceeH/luE8dIZyOP35ik7ahYojDuqlTV1bOrtEwl01sy2HFNGQfi5IDJvotg==}
@@ -2870,11 +2873,12 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@stazyu/baileys@0.1.0(audio-decode@2.2.3)(link-preview-js@3.0.0)(sharp@0.35.3(@types/node@22.19.17))(supports-color@7.2.0)':
+  '@stazyu/baileys@0.2.0(audio-decode@2.2.3)(link-preview-js@3.0.0)(sharp@0.35.3(@types/node@22.19.17))(supports-color@7.2.0)':
     dependencies:
       '@cacheable/node-cache': 1.5.3
       '@hapi/boom': 9.1.4
       async-mutex: 0.5.0
+      fflate: 0.8.2
       libsignal: 6.0.0
       lru-cache: 11.3.3
       music-metadata: 11.12.3(supports-color@7.2.0)
@@ -3534,6 +3538,8 @@ snapshots:
   fast-copy@4.0.3: {}
 
   fast-safe-stringify@2.1.1: {}
+
+  fflate@0.8.2: {}
 
   ffmpeg-static@5.3.0(supports-color@7.2.0):
     dependencies:

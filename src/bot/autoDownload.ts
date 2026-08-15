@@ -1,6 +1,6 @@
 import nexo from 'nexo-aio-downloader';
 import instagramDownload, { cleanupMergedFile } from '../utils/instagram.js';
-import type { WASocket } from 'baileys';
+import type { WASocket } from '@stazyu/baileys';
 import { createRequire } from 'module';
 import {
   getTwitterInfo,

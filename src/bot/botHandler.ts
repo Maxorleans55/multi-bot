@@ -1,4 +1,4 @@
-import { proto, WAMessage, WAMessageUpdate, WASocket } from 'baileys';
+import { proto, WAMessage, WAMessageUpdate, WASocket } from '@stazyu/baileys';
 import PluginManager from '../plugins/pluginManager.js';
 import { detectSocialMediaLink, downloadFromSocialMedia } from './autoDownload.js';
 import { getPrefixes, isMaintenance, getMaintenanceMessage, isOwner } from '../config/botConfig.js';
