@@ -4,7 +4,6 @@ allowBuilds:
   '@prisma/engines': true
   '@stazyu/baileys': true
   baileys: true
-  baileys@https://codeload.github.com/Stazyu/Baileys/tar.gz/2cafbbf676a179abf59b662f4ed181205b1d50aa: true
   canvas: true
   esbuild: true
   ffmpeg-static: true
@@ -15,3 +14,4 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@ai-sdk/gateway@4.0.51'
   - ai@7.0.64
+  - '@stazyu/baileys@0.1.0'

@@ -27,8 +27,8 @@ importers:
         specifier: ^1.19.0
         version: 1.19.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
       baileys:
-        specifier: github:Stazyu/Baileys.git
-        version: https://codeload.github.com/Stazyu/Baileys/tar.gz/2cafbbf676a179abf59b662f4ed181205b1d50aa(audio-decode@2.2.3)(link-preview-js@3.0.0)(sharp@0.35.3(@types/node@22.19.17))(supports-color@7.2.0)
+        specifier: npm:@stazyu/baileys
+        version: '@stazyu/baileys@0.1.0(audio-decode@2.2.3)(link-preview-js@3.0.0)(sharp@0.35.3(@types/node@22.19.17))(supports-color@7.2.0)'
       cheerio:
         specifier: ^1.2.0
         version: 1.2.0
@@ -738,6 +738,22 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
+  '@stazyu/baileys@0.1.0':
+    resolution: {integrity: sha512-ZN2ZIahtobOqHb2hp7lBBsD1dLxfOLlPiA8H73BUHgFtzHS4uy6zdrCa8wsVeTjXBOs4Bsv760vBylW+gIVU5Q==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      audio-decode: ^2.1.3
+      jimp: ^1.6.1
+      link-preview-js: ^3.0.0
+      sharp: '*'
+    peerDependenciesMeta:
+      audio-decode:
+        optional: true
+      jimp:
+        optional: true
+      link-preview-js:
+        optional: true
+
   '@thi.ng/bitstream@2.4.45':
     resolution: {integrity: sha512-LKOEJmmEvgUy1LKn79Hpc+EBMekGs5UOTqH3gcftl99w7fpzUAWg4gFmav34f/zw0SbjbnzO8EDmGUyyZW7dcA==}
     engines: {node: '>=18'}
@@ -999,23 +1015,6 @@ packages:
 
   axios@1.19.0:
     resolution: {integrity: sha512-ht/iuYZXEjFxLH/Hkezgd7m6JKlHHXEUSneaDz8uZe1Gj5QZtCnpyDsckvAiEnT89OEbCLmnte4R4sn7P0EKFw==}
-
-  baileys@https://codeload.github.com/Stazyu/Baileys/tar.gz/2cafbbf676a179abf59b662f4ed181205b1d50aa:
-    resolution: {gitHosted: true, integrity: sha512-InNC0rvP+lcWEoJOay3qIrj1Xdahpew8CKWsqEpli2lEea8DdUiWVERpGBcIoWCKaPHeULLF5+7VCyuF1cW5lg==, tarball: https://codeload.github.com/Stazyu/Baileys/tar.gz/2cafbbf676a179abf59b662f4ed181205b1d50aa}
-    version: 7.0.0-rc14
-    engines: {node: '>=20.0.0'}
-    peerDependencies:
-      audio-decode: ^2.1.3
-      jimp: ^1.6.1
-      link-preview-js: ^3.0.0
-      sharp: '*'
-    peerDependenciesMeta:
-      audio-decode:
-        optional: true
-      jimp:
-        optional: true
-      link-preview-js:
-        optional: true
 
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
@@ -2871,6 +2870,30 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
+  '@stazyu/baileys@0.1.0(audio-decode@2.2.3)(link-preview-js@3.0.0)(sharp@0.35.3(@types/node@22.19.17))(supports-color@7.2.0)':
+    dependencies:
+      '@cacheable/node-cache': 1.5.3
+      '@hapi/boom': 9.1.4
+      async-mutex: 0.5.0
+      libsignal: 6.0.0
+      lru-cache: 11.3.3
+      music-metadata: 11.12.3(supports-color@7.2.0)
+      p-queue: 9.2.0
+      pino: 9.14.0
+      protobufjs: 7.5.8
+      sharp: 0.35.3(@types/node@22.19.17)
+      whatsapp-rust-bridge: 0.5.4
+      ws: 8.20.0
+    optionalDependencies:
+      '@roamhq/wrtc': 0.10.0
+      audio-decode: 2.2.3
+      link-preview-js: 3.0.0
+      qrcode-terminal: 0.12.0
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
   '@thi.ng/bitstream@2.4.45':
     dependencies:
       '@thi.ng/errors': 2.6.7
@@ -3110,30 +3133,6 @@ snapshots:
     transitivePeerDependencies:
       - debug
       - supports-color
-
-  baileys@https://codeload.github.com/Stazyu/Baileys/tar.gz/2cafbbf676a179abf59b662f4ed181205b1d50aa(audio-decode@2.2.3)(link-preview-js@3.0.0)(sharp@0.35.3(@types/node@22.19.17))(supports-color@7.2.0):
-    dependencies:
-      '@cacheable/node-cache': 1.5.3
-      '@hapi/boom': 9.1.4
-      async-mutex: 0.5.0
-      libsignal: 6.0.0
-      lru-cache: 11.3.3
-      music-metadata: 11.12.3(supports-color@7.2.0)
-      p-queue: 9.2.0
-      pino: 9.14.0
-      protobufjs: 7.5.8
-      sharp: 0.35.3(@types/node@22.19.17)
-      whatsapp-rust-bridge: 0.5.4
-      ws: 8.20.0
-    optionalDependencies:
-      '@roamhq/wrtc': 0.10.0
-      audio-decode: 2.2.3
-      link-preview-js: 3.0.0
-      qrcode-terminal: 0.12.0
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
 
   base64-js@1.5.1: {}
 
