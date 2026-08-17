@@ -943,8 +943,8 @@ Legacy models (sudah ada tapi tidak aktif digunakan untuk message storage).
 **File:** [`Dockerfile`](Dockerfile:1)
 
 Multi-stage build:
-1. **Builder stage** (`node:20-bookworm`): Install dependencies, build TypeScript
-2. **Runtime stage** (`node:20-bookworm-slim`): Hanya runtime dependencies + compiled output
+1. **Builder stage** (`node:24-bookworm`): Install dependencies, build TypeScript
+2. **Runtime stage** (`node:24-bookworm-slim`): Hanya runtime dependencies + compiled output
 
 **Runtime dependencies:** `python3`, `libvips`, `openssl`, `ffmpeg`, `tini`
 

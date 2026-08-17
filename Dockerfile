@@ -1,5 +1,5 @@
 # ===== BASE BUILD (heavy, temporary) =====
-FROM node:20-bookworm AS builder
+FROM node:24-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
     python3 \
@@ -37,7 +37,7 @@ RUN pnpm prune --prod
 
 
 # ===== RUNTIME (super clean & kecil) =====
-FROM node:20-bookworm-slim AS runtime
+FROM node:24-bookworm-slim AS runtime
 
 WORKDIR /app
 
