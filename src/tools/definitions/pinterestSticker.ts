@@ -20,12 +20,31 @@ function parseStickerType(value: unknown): PinterestStickerType {
   return 'full';
 }
 
+/**
+ * Build the sticker pack name: prefer the LLM-provided `pack` argument,
+ * otherwise derive a readable name from the search query, otherwise fall
+ * back to a generic default.
+ */
+function buildPackName(packName: string | undefined, query: string, fallback: string): string {
+  if (packName?.trim()) return packName.trim();
+  if (query.trim()) {
+    const derived = query
+      .trim()
+      .split(/\s+/)
+      .slice(0, 3)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+    if (derived) return derived;
+  }
+  return fallback;
+}
+
 export const definition: AIToolDefinition = {
   type: 'function',
   function: {
     name: 'pinterest_sticker',
     description:
-      'Create and send WhatsApp sticker(s) from a Pinterest URL or a plain search keyword using gallery-dl on Pinterest. Use this when the user asks to make a sticker/stiker from Pinterest or when the user gives a Pinterest URL or a topic/keyword like "kucing". Supports making multiple stickers at once using the "count" parameter (e.g. "buat 5 stiker kucing").',
+      'Create and send WhatsApp sticker(s) from a Pinterest URL or a plain search keyword using gallery-dl on Pinterest. Use this when the user asks to make a sticker/stiker from Pinterest or when the user gives a Pinterest URL or a topic/keyword like "kucing". Supports making multiple stickers at once using the "count" parameter (e.g. "buat 5 stiker kucing"); multiple stickers are sent together as a single sticker pack.',
     parameters: {
       type: 'object',
       properties: {
@@ -39,7 +58,8 @@ export const definition: AIToolDefinition = {
         },
         pack: {
           type: 'string',
-          description: 'Optional sticker pack name. Default: Bot-Baileys-AI.',
+          description:
+            'Optional sticker pack name. When making multiple stickers (count > 1), generate a short, catchy, creative pack name from the topic/query (e.g. query "kucing lucu" → pack name "Kucing Lucu Pack"). If omitted, a name derived from the query is used automatically.',
         },
         author: {
           type: 'string',
@@ -112,7 +132,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
       };
     }
 
-    // Multiple stickers (batch)
+    // Multiple stickers (batch) → sent as a single WhatsApp sticker pack
     const batchResult = await createPinterestStickers({
       url: url || undefined,
       query: query || undefined,
@@ -123,27 +143,38 @@ export const execute: ToolExecuteFunction = async (args, context) => {
       startIndex: parseIndex(args.index),
     });
 
-    // Send each sticker individually
-    let sentCount = 0;
-    for (const stickerResult of batchResult.stickers) {
-      try {
-        await context.socket.sendMessage(context.fromJid, {
-          sticker: stickerResult.stickerBuffer,
-        });
-        sentCount++;
-      } catch (sendError) {
-        console.error('[Tool:pinterest_sticker] Gagal kirim sticker:', sendError);
-      }
+    if (batchResult.stickers.length === 0) {
+      return { success: false, message: 'Gagal membuat sticker.' };
     }
+
+    const resolvedPackName = buildPackName(packName, query, 'Sticker Pack');
+    const resolvedAuthorName = authorName || 'di buat oleh : Staz AI Bot\n\nJangan lupa follow IG owner @wahyuhp57';
+
+    // Send all stickers at once as one sticker pack (Baileys PR #1561 / @stazyu fork)
+    await context.socket.sendMessage(context.fromJid, {
+      stickerPack: {
+        name: resolvedPackName,
+        publisher: resolvedAuthorName,
+        packId: `sp-pinterest-${Date.now().toString(36)}`,
+        description: `Sticker ini di buat oleh ${resolvedAuthorName} berjumlah (${batchResult.stickers.length} sticker)\n\nJangan lupa follow IG owner @wahyuhp57`,
+        cover: batchResult.stickers[0].stickerBuffer,
+        stickers: batchResult.stickers.map((stickerResult, i) => ({
+          data: stickerResult.stickerBuffer,
+          emojis: ['✨'],
+          accessibilityLabel: `Sticker Pinterest ${i + 1}`,
+        })),
+      },
+    });
 
     return {
       success: true,
-      message: `Berhasil membuat ${sentCount} sticker dari Pinterest. Total ${batchResult.totalDownloaded} gambar ditemukan.`,
+      message: `Berhasil membuat ${batchResult.stickers.length} sticker dari Pinterest dan dikirim sebagai sticker pack "${resolvedPackName}". Total ${batchResult.totalDownloaded} gambar ditemukan.`,
       data: {
         requestedCount: count,
-        sentCount,
+        sentCount: batchResult.stickers.length,
         successCount: batchResult.successCount,
         totalDownloaded: batchResult.totalDownloaded,
+        sentAs: 'stickerPack',
       },
     };
   } catch (error: any) {

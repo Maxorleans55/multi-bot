@@ -115,7 +115,7 @@ const AICommand: CommandModule = {
 • ${context.simplified?.prefix || '!'}ai off - Nonaktifkan mode AI
 • ${context.simplified?.prefix || '!'}ai <pertanyaan> - Tanya AI langsung
 • ${context.simplified?.prefix || '!'}ai clear - Bersihkan percakapan
-• ${context.simplified?.prefix || '!'}ai models - Lihat model yang tersedia
+${isOwner(userId) ? `• ${context.simplified?.prefix || '!'}ai model <nama model> - Ganti model AI (hanya owner)` : ''}
 
 🔹 Mode AI aktif: ${isAIModeEnabledSync(userId) ? 'Ya' : 'Tidak'}`,
       });

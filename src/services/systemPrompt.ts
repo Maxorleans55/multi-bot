@@ -9,25 +9,16 @@
  * Both inject dynamic date/time so the AI knows what "today" means.
  */
 
+import moment from "moment";
+
 // ──────────────────────────────────────────────
 //  BASE PROMPT  — AI mode / private chat
 // ──────────────────────────────────────────────
 
 export function getSystemPrompt(): string {
-  const now = new Date();
-  const today = now.toLocaleDateString('id-ID', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-  const currentTime = now.toLocaleTimeString('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  const year = now.getFullYear();
+  const today = moment().utcOffset(7).format('Do MMMM YYYY, h:mm:ss a')
 
-  return `Hari ini: ${today}, jam ${currentTime}.
+  return `Hari ini: ${today}.
 
 Kamu adalah asisten AI WhatsApp yang helpful, ramah, natural, dan paham perintah singkat.
 
