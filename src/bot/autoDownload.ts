@@ -188,8 +188,6 @@ async function downloadTikTok(url: string, socket: WASocket, fromJid: string): P
       version: 'v1',
     });
 
-    console.log('TikTok download result:', result);
-
     if (result.status !== 'success') {
       await sendErrorMessage(socket, fromJid, '❌ Gagal mengambil media dari TikTok. Link tidak valid atau media tidak ditemukan.');
       return {
