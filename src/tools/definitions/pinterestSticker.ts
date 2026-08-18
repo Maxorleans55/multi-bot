@@ -148,7 +148,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     }
 
     const resolvedPackName = buildPackName(packName, query, 'Sticker Pack');
-    const resolvedAuthorName = authorName || 'di buat oleh : Staz AI Bot\n\nJangan lupa follow IG owner @wahyuhp57';
+    const resolvedAuthorName = authorName || 'Di buat oleh : Staz AI Bot\n\nJangan lupa follow IG owner @wahyuhp57';
 
     // Send all stickers at once as one sticker pack (Baileys PR #1561 / @stazyu fork)
     await context.socket.sendMessage(context.fromJid, {
@@ -156,7 +156,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
         name: resolvedPackName,
         publisher: resolvedAuthorName,
         packId: `sp-pinterest-${Date.now().toString(36)}`,
-        description: `Sticker ini di buat oleh ${resolvedAuthorName} berjumlah (${batchResult.stickers.length} sticker)\n\nJangan lupa follow IG owner @wahyuhp57`,
+        // description: `Sticker ini di buat oleh ${resolvedAuthorName} berjumlah (${batchResult.stickers.length} sticker)\n\nJangan lupa follow IG owner @wahyuhp57`,
         cover: batchResult.stickers[0].stickerBuffer,
         stickers: batchResult.stickers.map((stickerResult, i) => ({
           data: stickerResult.stickerBuffer,

@@ -337,8 +337,8 @@ export async function createPinterestStickers(options: PinterestStickerBatchOpti
       try {
         const imageBuffer = await readFile(filePath);
         const sticker = new Sticker(imageBuffer, {
-          pack: options.packName || 'Bot-Baileys-AI',
-          author: options.authorName || 'Pinterest',
+          pack: options.packName || 'Staz AI Bot',
+          author: options.authorName || 'Di buat oleh : Staz AI Bot\n\nJangan lupa follow IG owner @wahyuhp57',
           type: resolveStickerType(options.stickerType),
           quality: 100,
         });
