@@ -207,8 +207,8 @@ export class AIService {
 
     const messages = this.getConversationHistory(sessionId);
 
-    if (systemPrompt && messages.length === 0) {
-      messages.push({ role: 'system', content: systemPrompt });
+    if (systemPrompt) {
+      this.upsertSystemPrompt(messages, systemPrompt);
     }
 
     messages.push({ role: 'user', content: userMessage });
@@ -257,8 +257,8 @@ export class AIService {
 
     const messages = this.getConversationHistory(sessionId);
 
-    if (systemPrompt && messages.length === 0) {
-      messages.push({ role: 'system', content: systemPrompt });
+    if (systemPrompt) {
+      this.upsertSystemPrompt(messages, systemPrompt);
     }
 
     messages.push({ role: 'user', content: userMessage });
@@ -292,8 +292,8 @@ export class AIService {
 
     const messages = this.getConversationHistory(sessionId);
 
-    if (systemPrompt && messages.length === 0) {
-      messages.push({ role: 'system', content: systemPrompt });
+    if (systemPrompt) {
+      this.upsertSystemPrompt(messages, systemPrompt);
     }
 
     messages.push({ role: 'user', content: userMessage });
@@ -347,34 +347,30 @@ export class AIService {
           allowSystemInMessages: true,
         } as Parameters<typeof streamText>[0]);
 
-        // Use textStream for real-time streaming. Each text delta is emitted
-        // as the model generates — including intermediate messages like
-        // "Sedang mencari..." before tool calls, and final responses after.
+        // Only use the FINAL step's text as the assistant reply.
         //
-        // With stopWhen: isStepCount(4), the stream now correctly continues
-        // through all tool-calling steps.
+        // `textStream` concatenates the text deltas of EVERY step — including
+        // intermediate "thinking/planning" text the model emits before a tool
+        // call (e.g. "Coba gue download ulang nih..."). That intermediate text
+        // leaked into the final answer, producing multiple stacked "replies"
+        // in a single message. `result.steps` gives us per-step results, so we
+        // take only the last step (the real answer after tools have run).
         //
-        // IMPORTANT: AI SDK v7 stream is single-consumer. We must NOT call
-        // result.text after consuming textStream — pick one.
-        let fullText = '';
+        // IMPORTANT: AI SDK v7 stream is single-consumer. We consume `steps`
+        // instead of `textStream`/`text`.
+        const steps = await result.steps;
+        const finalText = steps.length > 0 ? (steps[steps.length - 1]?.text ?? '') : '';
 
-        for await (const chunk of result.textStream) {
-          fullText += chunk;
-
-          if (onChunk) {
-            const visible = this.filterToolCallArtifacts(fullText);
-            if (visible) {
-              onChunk({ content: visible, done: false });
-            }
-          }
+        const liveText = this.filterToolCallArtifacts(finalText);
+        if (onChunk && liveText) {
+          onChunk({ content: liveText, done: false });
         }
-
         if (onChunk) {
           onChunk({ content: '', done: true });
         }
 
-        let cleaned = this.filterToolCallArtifacts(fullText);
-        if (!cleaned && fullText && containsToolCallArtifact(fullText)) {
+        let cleaned = liveText;
+        if (!cleaned && finalText && containsToolCallArtifact(finalText)) {
           cleaned = MALFORMED_TOOL_CALL_FALLBACK;
         }
 
@@ -629,6 +625,29 @@ export class AIService {
   private setExpiry(sessionId: string): void {
     if (this.isGroupSession(sessionId)) {
       this.conversationExpiry.set(sessionId, Date.now() + this.GROUP_EXPIRY_MS);
+    }
+  }
+
+  /**
+   * Insert or refresh the system prompt in the conversation.
+   *
+   * The old code only pushed the system prompt when the history was empty
+   * (`messages.length === 0`). That meant the timestamp baked into the
+   * prompt stayed frozen at the FIRST message of the conversation — the AI
+   * never learned the current date/time on later turns.
+   *
+   * Now the system prompt is always replaced at the front of the array on
+   * every call, so dynamic values (current date/time, group context) are
+   * always fresh while conversation history is preserved.
+   */
+  private upsertSystemPrompt(messages: ChatMessage[], systemPrompt: string): void {
+    const idx = messages.findIndex((m) => m.role === 'system');
+    const systemMessage: ChatMessage = { role: 'system', content: systemPrompt };
+
+    if (idx === -1) {
+      messages.unshift(systemMessage);
+    } else {
+      messages[idx] = systemMessage;
     }
   }
 

@@ -7,8 +7,6 @@ import { getSystemPrompt } from '../../services/systemPrompt.js';
 import { stripToolCallArtifacts } from '../../utils/toolCallFilter.js';
 import { isAIModeEnabledSync, setAIModeEnabled } from '../../services/aiModePersistence.js';
 
-const DEFAULT_SYSTEM_PROMPT = getSystemPrompt();
-
 const AICommand: CommandModule = {
   config: {
     name: 'ai',
@@ -137,7 +135,7 @@ ${isOwner(userId) ? `• ${context.simplified?.prefix || '!'}ai model <nama mode
       await aiService.chatWithTools(
         userId,
         question,
-        DEFAULT_SYSTEM_PROMPT,
+        getSystemPrompt(),
         (chunk) => {
           if (!chunk.done && chunk.content) {
             responseBuffer = chunk.content;
@@ -177,7 +175,7 @@ export function getAIMode(userId: string): 'single' | 'chat' {
 }
 
 export function handleAIMessage(userId: string, message: string): Promise<string> {
-  return aiService.chat(userId, message, DEFAULT_SYSTEM_PROMPT);
+  return aiService.chat(userId, message, getSystemPrompt());
 }
 
 export function clearAISession(userId: string): void {

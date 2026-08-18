@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import https from 'https';
 import http from 'http';
 import type { CommandModule } from '../../types/index.js';
+import { WAMessage } from '@stazyu/baileys';
 
 const execAsync = promisify(exec);
 
@@ -294,6 +295,7 @@ const speedtestCommand: CommandModule = {
             // Try multiple test file sources
             const testFiles = [
                 { url: 'https://speed.cloudflare.com/__down?bytes=5000000', label: 'Cloudflare (5MB)' },
+                { url: 'https://speed.cloudflare.com/__down?bytes=10000000', label: 'Cloudflare (10MB)' }
             ];
 
             // Add HTTP options as fallbacks
@@ -307,10 +309,19 @@ const speedtestCommand: CommandModule = {
             let downloadSuccess = false;
             for (const testFile of testFiles) {
                 if (downloadSuccess) break;
+                const index = testFiles.indexOf(testFile) + 1;
 
-                await socket.sendMessage(fromJid, {
-                    text: `⬇️ Testing download from ${testFile.label}...`,
-                });
+                let totalTest: WAMessage | undefined;
+                if (index === 1) {
+                    totalTest = await socket.sendMessage(fromJid, {
+                        text: `🔄 Testing download from ${testFile.label}...`,
+                    });
+                } else {
+                    await socket.sendMessage(fromJid, {
+                        text: `🔄 Testing download from ${testFile.label}...`,
+                        edit: totalTest
+                    });
+                }
 
                 const dlResult = await downloadFile(testFile.url, 30000);
 
@@ -327,7 +338,9 @@ const speedtestCommand: CommandModule = {
                 results.push(`   ├─ Time: ${durationSec.toFixed(1)}s`);
                 results.push(`   ├─ Speed: ${formatSpeed(bytesPerSecond)}`);
                 results.push(`   └─ Bandwidth: ${formatMbps(bytesPerSecond)}`);
-                downloadSuccess = true;
+                if (testFiles.length === index) {
+                    downloadSuccess = true;
+                }
             }
 
             if (!downloadSuccess) {

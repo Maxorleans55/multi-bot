@@ -1,5 +1,5 @@
-import type { CommandModule } from '../../types/index.js';
-import { getPrefixes } from '../../config/botConfig.js';
+import type { CommandModule, CommandConfig } from '../../types/index.js';
+import { getPrefixes, isOwner } from '../../config/botConfig.js';
 
 const categoryIcons: Record<string, string> = {
   basic: '📂',
@@ -8,6 +8,7 @@ const categoryIcons: Record<string, string> = {
   media: '🎬',
   owner: '👑',
   session: '🔐',
+  general: '📁',
 };
 
 const autoFeatureIcons: Record<string, string> = {
@@ -17,6 +18,11 @@ const autoFeatureIcons: Record<string, string> = {
   twitter: '🐦',
   youtube: '🎥',
 };
+
+interface CommandEntry {
+  config: CommandConfig;
+  plugin: string;
+}
 
 const helpCommand: CommandModule = {
   config: {
@@ -38,19 +44,22 @@ const helpCommand: CommandModule = {
     const prefixes = getPrefixes();
     const matchedPrefix = context.simplified?.matchedPrefix || prefixes[0] || '!';
 
+    const senderJid = context.simplified?.user_id || context.fromJid || '';
+    const isOwnerUser = isOwner(senderJid);
+
     const allCommands = pm.getAllCommands();
 
     if (args.length > 0) {
       const commandName = args[0].toLowerCase();
       const command = pm.getCommand(commandName);
 
-      if (command) {
+      if (command && (!command.config.ownerOnly || isOwnerUser)) {
         const aliasesText = command.config.aliases
           ? `\n┃ ✦ *Alias:* ${command.config.aliases.map((a: string) => `\`${matchedPrefix}${a}\``).join(', ')}`
           : '';
 
         const helpText =
-`╭━━━「 📖 *${command.config.name}* 」━━━╮
+`╭━━━━━「 📖 *${command.config.name.toUpperCase()}* 」━━━━━╮
 ┃
 ┃ ${command.config.description}
 ┃
@@ -58,8 +67,9 @@ const helpCommand: CommandModule = {
 ┃ ✦ *Kategori:* ${categoryIcons[command.config.category || ''] || '📁'} ${command.config.category || 'general'}
 ┃ ✦ *Admin:* ${command.config.adminOnly ? '✅ Ya' : '❌ Tidak'}
 ┃ ✦ *Owner:* ${command.config.ownerOnly ? '✅ Ya' : '❌ Tidak'}
+┃ ✦ *Premium:* ${command.config.premiumOnly ? '✅ Ya' : '❌ Tidak'}
 ┃
-╰━━━━━━━━━━━━━━━━━━╯`;
+╰━━━━━━━━━━━━━━━━━━━━╯`;
 
         await context.socket.sendMessage(context.fromJid, {
           text: helpText,
@@ -70,9 +80,14 @@ const helpCommand: CommandModule = {
         });
       }
     } else {
-      const categories = new Map<string, Array<{ config: any; plugin: string }>>();
+      const categories = new Map<string, CommandEntry[]>();
 
       for (const cmd of allCommands) {
+        // Sembunyikan command khusus owner dari pengguna non-owner.
+        if (cmd.config.ownerOnly && !isOwnerUser) {
+          continue;
+        }
+
         const category = cmd.config.category || 'general';
         if (!categories.has(category)) {
           categories.set(category, []);
@@ -81,10 +96,10 @@ const helpCommand: CommandModule = {
       }
 
       let helpText =
-`╭━━━━━━━━━━━━━━━━━━╮
-┃      🤖 *BOT MENU*     
-┃   _Baileys WhatsApp Bot_
-╰━━━━━━━━━━━━━━━━━━╯
+`╭━━━━━━━━━━━━━━━━━━━╮
+┃    🤖 *BOT MENU*     
+┃   ✦ _Staz AI Bot_ ✦
+╰━━━━━━━━━━━━━━━━━━━╯
 
 `;
 
@@ -93,7 +108,7 @@ const helpCommand: CommandModule = {
 ┃
 ${['Instagram', 'TikTok', 'Facebook', 'Twitter/X', 'YouTube'].map(p => `┃ ${autoFeatureIcons[p.toLowerCase().replace('/', '').replace('x', 'twitter')] || '🔗'} *${p}* — Auto download`).join('\n')}
 ┃
-╰━━━━━━━━━━━━━━━━━━╯
+╰━━━━━━━━━━━━━━━━━━━╯
 
 `;
 
@@ -109,7 +124,7 @@ ${commands.map(cmd => {
   return `┃ ✦ \`${matchedPrefix}${cmd.config.name}\`${aliases}\n┃   ${cmd.config.description}`;
 }).join('\n┃\n')}
 ┃
-╰━━━━━━━━━━━━━━━━━━╯
+╰━━━━━━━━━━━━━━━━━━━╯
 
 `;
       }
@@ -121,7 +136,24 @@ ${commands.map(cmd => {
 ┃ ✦ *Prefix:* \`${matchedPrefix}\`
 ┃ ✦ *Gunakan* \`${matchedPrefix}help <cmd>\` *untuk detail*
 ┃
-╰━━━━━━━━━━━━━━━━━━╯`;
+╰━━━━━━━━━━━━━━━━━━━╯
+
+`;
+
+      helpText +=
+`╭━━━「 ⚖️ *SYARAT & KETENTUAN (S&K)* 」━━━╮
+┃
+┃ 1. Bot ini bersifat _otomatis_ & tanpa jaminan.
+┃ 2. Dilarang keras memakai bot untuk hal
+┃    _ilegal, spam, ataupun melanggar hukum_.
+┃ 3. Penyalahgunaan fitur menjadi tanggung jawab
+┃    _pengguna sepenuhnya_.
+┃ 4. Pemilik bot berhak _memblokir / membatasi_
+┃    akses pengguna tanpa pemberitahuan.
+┃ 5. Dengan memakai bot, kamu dianggap
+┃    _menyetujui_ seluruh ketentuan ini.
+┃
+╰━━━━━━━━━━━━━━━━━━━╯`;
 
       await context.socket.sendMessage(context.fromJid, {
         text: helpText,
