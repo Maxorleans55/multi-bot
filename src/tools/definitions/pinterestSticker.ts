@@ -102,6 +102,8 @@ export const execute: ToolExecuteFunction = async (args, context) => {
   const stickerType = parseStickerType(args.sticker_type);
   const packName = typeof args.pack === 'string' ? args.pack : undefined;
   const authorName = typeof args.author === 'string' ? args.author : undefined;
+  const resolvedPackName = buildPackName(packName, query, 'Sticker Pack');
+  const resolvedAuthorName = authorName || 'Di buat oleh : Staz AI Bot\n\nJangan lupa follow IG owner @wahyuhp57';
 
   console.log(`[Tool:PinterestSticker] 🎨 Creating: ${url || query} (count: ${count}, type: ${stickerType})`);
 
@@ -111,8 +113,8 @@ export const execute: ToolExecuteFunction = async (args, context) => {
       const result = await createPinterestSticker({
         url: url || undefined,
         query: query || undefined,
-        packName,
-        authorName,
+        packName: resolvedPackName,
+        authorName: resolvedAuthorName,
         stickerType,
         index: parseIndex(args.index),
       });
@@ -136,8 +138,8 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     const batchResult = await createPinterestStickers({
       url: url || undefined,
       query: query || undefined,
-      packName,
-      authorName,
+      packName: resolvedPackName,
+      authorName: resolvedAuthorName,
       stickerType,
       count,
       startIndex: parseIndex(args.index),
@@ -146,9 +148,6 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     if (batchResult.stickers.length === 0) {
       return { success: false, message: 'Gagal membuat sticker.' };
     }
-
-    const resolvedPackName = buildPackName(packName, query, 'Sticker Pack');
-    const resolvedAuthorName = authorName || 'Di buat oleh : Staz AI Bot\n\nJangan lupa follow IG owner @wahyuhp57';
 
     // Send all stickers at once as one sticker pack (Baileys PR #1561 / @stazyu fork)
     await context.socket.sendMessage(context.fromJid, {
