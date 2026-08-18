@@ -1,4 +1,5 @@
 import axios from 'axios';
+import NodeCache from 'node-cache';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { generateText, streamText, dynamicTool, isStepCount, type ModelMessage } from 'ai';
 import toolRegistry from '../tools/toolRegistry.js';
@@ -20,9 +21,11 @@ interface ChatMessage {
 interface StreamChunk {
   content: string;
   done: boolean;
+  /** 'progress' = pre-tool acknowledgment; 'final' = answer after tools ran. */
+  phase?: 'progress' | 'final';
 }
 
-type StreamCallback = (chunk: StreamChunk) => void;
+type StreamCallback = (chunk: StreamChunk) => void | Promise<void>;
 
 const MALFORMED_TOOL_CALL_FALLBACK =
   'Maaf, pencarian gagal diproses. Silakan coba lagi sebentar.';
@@ -36,11 +39,19 @@ export class AIService {
   private baseUrl: string;
   private model: string;
   private openaiCompat: ReturnType<typeof createOpenAICompatible> | null = null;
-  private conversationHistory: Map<string, ChatMessage[]> = new Map();
-  private conversationExpiry: Map<string, number> = new Map();
-  private readonly GROUP_EXPIRY_MS = 10 * 60 * 1000;
+  private conversationCache: NodeCache;
+  private readonly GROUP_TTL_SEC = 10 * 60;
+  private readonly PRIVATE_TTL_SEC = 60 * 60;
+  private readonly MAX_CONVERSATIONS = 1000;
 
   constructor() {
+    this.conversationCache = new NodeCache({
+      stdTTL: this.PRIVATE_TTL_SEC,
+      checkperiod: 120,
+      useClones: false,
+      maxKeys: this.MAX_CONVERSATIONS,
+    });
+
     this.provider = (process.env.AI_PROVIDER?.toLowerCase() as Provider) || 'openrouter';
 
     if (this.provider === 'ollama') {
@@ -228,8 +239,7 @@ export class AIService {
 
       const assistantMessage = result.text || '';
       messages.push({ role: 'assistant', content: assistantMessage });
-      this.conversationHistory.set(sessionId, messages);
-      this.setExpiry(sessionId);
+      this.setConversation(sessionId, messages);
 
       return assistantMessage;
     } catch (error: unknown) {
@@ -347,26 +357,61 @@ export class AIService {
           allowSystemInMessages: true,
         } as Parameters<typeof streamText>[0]);
 
-        // Only use the FINAL step's text as the assistant reply.
+        // Live-stream via `fullStream` so we can emit a short acknowledgment
+        // ("siap, ditunggu ya") BEFORE a tool executes, and the final
+        // verification answer AFTER the tool has finished. `result.steps`
+        // would only give us the buffered result, so the acknowledgment would
+        // arrive after the media — the wrong order.
         //
-        // `textStream` concatenates the text deltas of EVERY step — including
-        // intermediate "thinking/planning" text the model emits before a tool
-        // call (e.g. "Coba gue download ulang nih..."). That intermediate text
-        // leaked into the final answer, producing multiple stacked "replies"
-        // in a single message. `result.steps` gives us per-step results, so we
-        // take only the last step (the real answer after tools have run).
+        // IMPORTANT: AI SDK v7 stream is single-consumer. We consume
+        // `fullStream` instead of `textStream`/`steps`.
         //
-        // IMPORTANT: AI SDK v7 stream is single-consumer. We consume `steps`
-        // instead of `textStream`/`text`.
-        const steps = await result.steps;
-        const finalText = steps.length > 0 ? (steps[steps.length - 1]?.text ?? '') : '';
+        // NOTE: `fullStream` emits `TextStreamPart` chunks. The relevant ones
+        // for the ack → tool → final ordering are:
+        //   - 'start-step'      → a new model step begins (reset buffer)
+        //   - 'text-delta'      → carries `text` (the model's pre-tool text)
+        //   - 'tool-input-start' / 'tool-call' → the model is about to run a tool
+        // We flush the buffered text as an acknowledgment at the FIRST tool
+        // event, before the tool executes and its media is sent.
+        let stepText = '';
+        let finalText = '';
+        let ackSent = false;
+
+        type FullStreamPart = { type: string; text?: string; delta?: string };
+
+        for await (const part of result.stream as unknown as AsyncIterable<FullStreamPart>) {
+          switch (part.type) {
+            case 'start-step':
+              stepText = '';
+              break;
+            case 'text-delta':
+              stepText += part.text ?? '';
+              break;
+            case 'tool-input-start':
+            case 'tool-call':
+              // Flush the pre-tool text as an acknowledgment (first one only).
+              if (!ackSent) {
+                ackSent = true;
+                const ack = this.filterToolCallArtifacts(stepText);
+                if (ack.trim() && onChunk) {
+                  await onChunk({ content: ack, done: false, phase: 'progress' });
+                }
+              }
+              stepText = '';
+              break;
+            default:
+              break;
+          }
+        }
+
+        finalText = stepText;
 
         const liveText = this.filterToolCallArtifacts(finalText);
         if (onChunk && liveText) {
-          onChunk({ content: liveText, done: false });
+          onChunk({ content: liveText, done: false, phase: 'final' });
         }
         if (onChunk) {
-          onChunk({ content: '', done: true });
+          onChunk({ content: '', done: true, phase: 'final' });
         }
 
         let cleaned = liveText;
@@ -376,8 +421,7 @@ export class AIService {
 
         if (cleaned) {
           messages.push({ role: 'assistant', content: cleaned });
-          this.conversationHistory.set(sessionId, messages);
-          this.setExpiry(sessionId);
+          this.setConversation(sessionId, messages);
           return cleaned;
         }
 
@@ -386,10 +430,15 @@ export class AIService {
         // already ran the full tool-calling loop internally (maxSteps). A retry
         // here re-sends the same user message and re-executes the same tools,
         // which caused duplicate downloads / repeated tool calls.
+        //
+        // Some providers/models return NO final text after executing a tool
+        // (e.g. the media was already sent directly by the tool). That must
+        // not surface as an error — fall back to a neutral verification reply.
         if (hadTools) {
-          throw new Error(
-            'AI response empty after all retries (tools executed but model returned no text).',
-          );
+          const fallback = 'Udah diproses, cek chat ya.';
+          messages.push({ role: 'assistant', content: fallback });
+          this.setConversation(sessionId, messages);
+          return fallback;
         }
 
         // No tools: retry empty responses up to MAX_EMPTY_RETRIES.
@@ -465,8 +514,7 @@ export class AIService {
       const assistantMessage = response.data?.message?.content || '';
 
       messages.push({ role: 'assistant', content: assistantMessage });
-      this.conversationHistory.set(sessionId, messages);
-      this.setExpiry(sessionId);
+      this.setConversation(sessionId, messages);
 
       return assistantMessage;
     } catch (error: unknown) {
@@ -530,8 +578,7 @@ export class AIService {
         if (finalContent || !isError) {
           if (finalContent) {
             messages.push({ role: 'assistant', content: finalContent });
-            this.conversationHistory.set(sessionId, messages);
-            this.setExpiry(sessionId);
+            this.setConversation(sessionId, messages);
           }
           resolve(finalContent);
         } else {
@@ -599,33 +646,31 @@ export class AIService {
   // ────────────────────────────────────────────────────────────────
 
   getConversationHistory(sessionId: string): ChatMessage[] {
-    this.checkAndClearExpired(sessionId);
-    return this.conversationHistory.get(sessionId) || [];
+    return this.conversationCache.get<ChatMessage[]>(sessionId) || [];
   }
 
   clearConversation(sessionId: string): void {
-    this.conversationHistory.delete(sessionId);
-    this.conversationExpiry.delete(sessionId);
+    this.conversationCache.del(sessionId);
   }
 
   private isGroupSession(sessionId: string): boolean {
     return sessionId.includes('@g.us');
   }
 
-  private checkAndClearExpired(sessionId: string): void {
-    if (this.isGroupSession(sessionId)) {
-      const expiry = this.conversationExpiry.get(sessionId);
-      if (expiry && Date.now() > expiry) {
-        this.conversationHistory.delete(sessionId);
-        this.conversationExpiry.delete(sessionId);
-      }
-    }
-  }
-
-  private setExpiry(sessionId: string): void {
-    if (this.isGroupSession(sessionId)) {
-      this.conversationExpiry.set(sessionId, Date.now() + this.GROUP_EXPIRY_MS);
-    }
+  /**
+   * Persist conversation history with a per-scope TTL.
+   *
+   * - Group chats: short TTL (10 min) because group context changes fast and
+   *   many participants share one history.
+   * - Private chats: longer TTL (1 hour) so a single user's context survives
+   *   across gaps, but still bounded to prevent unbounded memory growth.
+   *
+   * node-cache handles TTL/eviction (checkperiod) and maxKeys cleanup, so we
+   * no longer need the manual `conversationExpiry` Map + `checkAndClearExpired`.
+   */
+  private setConversation(sessionId: string, messages: ChatMessage[]): void {
+    const ttl = this.isGroupSession(sessionId) ? this.GROUP_TTL_SEC : this.PRIVATE_TTL_SEC;
+    this.conversationCache.set(sessionId, messages, ttl);
   }
 
   /**

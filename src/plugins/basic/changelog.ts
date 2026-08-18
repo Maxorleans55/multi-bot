@@ -18,6 +18,45 @@ const changelogCommand: CommandModule = {
 ┃   _Apa yang baru?_
 ╰━━━━━━━━━━━━━━━━━━╯
 
+📅 *17 Agustus 2026*
+
+╭━━━━━「 📨 *Sticker Pack Telegram* 」━━━━━╮
+┃
+┃ • *Feat:* Ubah pack sticker Telegram
+┃   (t.me/addstickers) jadi sticker
+┃   pack WhatsApp.
+┃
+┃ • *Usage:* \`!tgstickerpack <url/nama>\`
+┃
+╰━━━━━━━━━━━━━━━━━━╯
+
+╭━━━━━「 📌 *Sticker Pack Pinterest* 」━━━━━╮
+┃
+┃ • *Feat:* Bikin banyak sticker dari
+┃   Pinterest sekaligus, dikirim jadi
+┃   satu sticker pack (maksimal 50).
+┃
+┃ • *Usage:* \`!pinsticker <url/keyword>\`
+┃   atau minta langsung ke AI.
+┃
+╰━━━━━━━━━━━━━━━━━━╯
+
+📅 *15 Agustus 2026*
+
+╭━━━━━「 📦 *Sticker Pack* 」━━━━━╮
+┃
+┃ • *Feat:* Bikin & kirim *sticker pack*
+┃   langsung dari WhatsApp.
+┃
+┃ • *Feat:* Dukung album — reply ke
+┃   beberapa media sekaligus jadi
+┃   satu pack (maksimal 60 sticker).
+┃
+┃ • *Usage:* \`!stickerpack <Nama|Publisher>\`
+┃   → \`!stickerpack add\` → \`!stickerpack send\`
+┃
+╰━━━━━━━━━━━━━━━━━━╯
+
 📅 *14 Agustus 2026*
 
 ╭━━━━━「 🧠 *AI Lebih Cepat* 」━━━━━╮

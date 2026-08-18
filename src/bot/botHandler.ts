@@ -773,8 +773,16 @@ export class BotHandler {
         userId,
         message,
         groupPrompt,
-        (chunk) => {
-          if (!chunk.done && chunk.content) {
+        async (chunk) => {
+          if (chunk.done) return;
+          if (chunk.phase === 'progress') {
+            const ack = stripToolCallArtifacts(chunk.content);
+            if (ack.trim()) {
+              await this.socket.sendMessage(to, { text: ack }).catch(() => {});
+            }
+            return;
+          }
+          if (chunk.content) {
             fullResponse = chunk.content;
           }
         },
@@ -864,8 +872,16 @@ export class BotHandler {
         userId,
         message,
         systemPrompt,
-        (chunk) => {
-          if (!chunk.done && chunk.content) {
+        async (chunk) => {
+          if (chunk.done) return;
+          if (chunk.phase === 'progress') {
+            const ack = stripToolCallArtifacts(chunk.content);
+            if (ack.trim()) {
+              await this.socket.sendMessage(to, { text: ack }).catch(() => {});
+            }
+            return;
+          }
+          if (chunk.content) {
             fullResponse = chunk.content;
           }
         },

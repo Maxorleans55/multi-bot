@@ -110,6 +110,15 @@ const hasDocumentIntent = (userMessage: string): boolean =>
 const hasAudioIntent = (userMessage: string): boolean =>
   WANTS_AUDIO_PATTERN.test(userMessage);
 
+/**
+ * Extract an explicit pixel height from the user text (e.g. "720p", "1080p",
+ * "360p"). Returns null when no resolution is mentioned.
+ */
+const extractQualityIntent = (userMessage: string): string | null => {
+  const match = userMessage.match(/(\d{3,4})p\b/i);
+  return match ? `${match[1]}p` : null;
+};
+
 // ─────────────────────────────────────────────────────────────
 //  DUPLICATE DOWNLOAD GUARD
 // ─────────────────────────────────────────────────────────────
@@ -469,7 +478,20 @@ export const execute: ToolExecuteFunction = async (args, context) => {
 
   const explicitFormat = args.format as string | undefined;
   const format = explicitFormat || 'video';
-  const quality = (args.quality as string) || 'best';
+
+  // Fallback: if the model missed `quality` but the user explicitly named a
+  // resolution (e.g. "720p"), honor it instead of silently defaulting to "best".
+  const explicitQuality = args.quality as string | undefined;
+  let quality = explicitQuality || 'best';
+  if (!explicitQuality) {
+    const detectedQuality = extractQualityIntent(rawUserMessage);
+    if (detectedQuality) {
+      quality = detectedQuality;
+      log.info(
+        `[Tool:YouTube] 🎚️ Detected quality "${detectedQuality}" from user message`,
+      );
+    }
+  }
 
   // Fallback #1: if the model missed `as_document` but the user explicitly
   // asked for a document/file, force document mode.
