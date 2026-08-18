@@ -306,7 +306,8 @@ async function doDownloadYoutube(params: DownloadParams): Promise<ToolExecuteRes
   );
 
   try {
-    const { youtubeDl } = await import('youtube-dl-exec');
+    const { create } = await import('youtube-dl-exec');
+    const youtubeDl = create('yt-dlp');
     const tempDir = path.join(process.cwd(), 'temp');
 
     await fs.mkdir(tempDir, { recursive: true });
