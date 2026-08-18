@@ -281,7 +281,7 @@ export async function createPinterestSticker(options: PinterestStickerOptions): 
     const sourceFile = imageFiles[0];
     const imageBuffer = await readFile(sourceFile);
     const sticker = new Sticker(imageBuffer, {
-      pack: options.packName || 'Yu-Bot-AI',
+      pack: options.packName || 'Staz-AI-Bot',
       author: options.authorName || '',
       type: resolveStickerType(options.stickerType),
       quality: 100,

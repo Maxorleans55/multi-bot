@@ -6,7 +6,7 @@ const testbuttonCommand: CommandModule = {
         aliases: ['tb', 'list'],
         description: 'Send an interactive list message',
         usage: '!testbutton',
-        category: 'basic',
+        category: 'owner',
     },
     handler: async function (context, args: string[]): Promise<void> {
         const jid = context.fromJid;

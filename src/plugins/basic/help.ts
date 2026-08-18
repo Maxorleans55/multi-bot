@@ -150,7 +150,9 @@ ${commands.map(cmd => {
 ┃    _pengguna sepenuhnya_.
 ┃ 4. Pemilik bot berhak _memblokir / membatasi_
 ┃    akses pengguna tanpa pemberitahuan.
-┃ 5. Dengan memakai bot, kamu dianggap
+┃ 5. Jangan pernah mengirimkan _data pribadi atau sensitif_
+┃    ke bot.
+┃ 6. Dengan memakai bot, kamu dianggap
 ┃    _menyetujui_ seluruh ketentuan ini.
 ┃
 ╰━━━━━━━━━━━━━━━━━━━╯`;

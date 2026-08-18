@@ -532,7 +532,7 @@ export class BotHandler {
               false;
           }
 
-          const isCalled = body?.toLowerCase() ? /(^|\s)(bot\b|bang\s*bot\b|kak\s*bot\b|mas\s*bot\b)/i.test(body) : false;
+          const isCalled = body?.toLowerCase() ? /(^|\s)(bot\b|bang\s*bot\b|kak\s*bot\b|mas\s*bot\b|staz\b)/i.test(body) : false;
 
           if ((isBotMentioned || isReplyToBot || isCalled || tagAll) && isAIGroupEnabled(from)) {
             // ── Daily limit: group AI ─────────────────────────────────
