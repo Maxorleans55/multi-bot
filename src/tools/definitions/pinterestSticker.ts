@@ -10,7 +10,7 @@ function parseIndex(value: unknown): number {
 function parseCount(value: unknown): number {
   const parsed = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(parsed) || parsed < 1) return 1;
-  return Math.min(Math.floor(parsed), 10);
+  return Math.min(Math.floor(parsed), 50);
 }
 
 function parseStickerType(value: unknown): PinterestStickerType {
@@ -76,7 +76,7 @@ export const definition: AIToolDefinition = {
         },
         count: {
           type: 'number',
-          description: 'Number of stickers to make. Default 1. Maximum 10. Use this when user asks for multiple stickers like "buat 5 stiker".',
+          description: 'Number of stickers to make. Default 1. Maximum 50. Use this when user asks for multiple stickers like "buat 5 stiker".',
         },
       },
       required: [],

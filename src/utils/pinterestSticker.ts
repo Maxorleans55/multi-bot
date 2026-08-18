@@ -42,7 +42,7 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_OUTPUT_CHARS = 4_000;
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
 const PINTEREST_URL_PATTERN = /^https?:\/\/([a-z0-9-]+\.)?(pinterest\.[a-z.]+|pin\.it)\//i;
-const MAX_BATCH_COUNT = 10;
+const MAX_BATCH_COUNT = 50;
 
 function getBinary(): string {
   return process.env.PINTEREST_DL_BIN?.trim() || 'gallery-dl';
