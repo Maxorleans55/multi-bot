@@ -1,39 +1,43 @@
-import type { AIToolDefinition, ToolExecuteFunction } from '../../types/tools.js';
+import type {
+  AIToolDefinition,
+  ToolExecuteFunction,
+} from "../../types/tools.js";
 
 import {
   definition as downloadSocialDef,
   execute as executeDownloadSocial,
-} from './socialDownload.js';
+} from "./socialDownload.js";
 
 import {
   definition as downloadYoutubeDef,
   execute as executeDownloadYoutube,
-} from './downloadYoutube.js';
+} from "./downloadYoutube.js";
 
 import {
   definition as pinterestSearchDef,
   execute as executePinterestSearch,
-} from './pinterestSearch.js';
+} from "./pinterestSearch.js";
 
 import {
-  definition as pinterestStickerDef,
-  execute as executePinterestSticker,
-} from './pinterestSticker.js';
+  definition as galleryDlStickerDef,
+  execute as executeGalleryDlSticker,
+} from "./galleryDlSticker.js";
 
 import {
   definition as webFetchDef,
   execute as executeWebFetch,
-} from './webFetch.js';
+} from "./webFetch.js";
 
 import {
   definition as webSearchDef,
   execute as executeWebSearch,
-} from './webSearch.js';
+} from "./webSearch.js";
 
 export const downloadSocialMedia = downloadSocialDef;
 export const downloadYoutube = downloadYoutubeDef;
 export const pinterestSearch = pinterestSearchDef;
-export const pinterestSticker = pinterestStickerDef;
+export const galleryDlSticker = galleryDlStickerDef;
+export const pinterestSticker = galleryDlStickerDef;
 export const webFetch = webFetchDef;
 export const webSearch = webSearchDef;
 
@@ -41,7 +45,7 @@ export {
   executeDownloadSocial,
   executeDownloadYoutube,
   executePinterestSearch,
-  executePinterestSticker,
+  executeGalleryDlSticker,
   executeWebFetch,
   executeWebSearch,
 };
@@ -55,32 +59,38 @@ export const allTools: Array<{
   execute: ToolExecuteFunction;
 }> = [
   {
-    name: 'download_social_media',
+    name: "download_social_media",
     definition: downloadSocialDef,
     execute: executeDownloadSocial,
   },
   {
-    name: 'download_youtube',
+    name: "download_youtube",
     definition: downloadYoutubeDef,
     execute: executeDownloadYoutube,
   },
   {
-    name: 'pinterest_search',
+    name: "pinterest_search",
     definition: pinterestSearchDef,
     execute: executePinterestSearch,
   },
   {
-    name: 'pinterest_sticker',
-    definition: pinterestStickerDef,
-    execute: executePinterestSticker,
+    name: "gallery_dl_sticker",
+    definition: galleryDlStickerDef,
+    execute: executeGalleryDlSticker,
+  },
+  // Alias: keep the legacy tool name working for models that still call it.
+  {
+    name: "pinterest_sticker",
+    definition: galleryDlStickerDef,
+    execute: executeGalleryDlSticker,
   },
   {
-    name: 'web_fetch',
+    name: "web_fetch",
     definition: webFetchDef,
     execute: executeWebFetch,
   },
   {
-    name: 'web_search',
+    name: "web_search",
     definition: webSearchDef,
     execute: executeWebSearch,
   },
