@@ -1,12 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient({
-  transactionOptions: {
-    maxWait: 0,
-    timeout: 0,
-  },
-  // log: ['query', 'error', 'warn'],
-});
+const prisma = new PrismaClient();
 
 // Override $transaction to run operations sequentially (free tier MongoDB doesn't support transactions)
 const originalTransaction = prisma.$transaction.bind(prisma);
