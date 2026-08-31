@@ -32,7 +32,7 @@ const DEFAULT_OPTIONS: Required<ValidationOptions> = {
   maxBodyLength: 65536,
   maxMessageAgeSeconds: 300,
   maxFutureOffsetSeconds: 30,
-  allowSelfMessages: false,
+  allowSelfMessages: true,
 };
 
 /**
