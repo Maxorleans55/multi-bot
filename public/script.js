@@ -1,6 +1,7 @@
 let currentSession = null;
 let pollInterval = null;
 let musicPlaying = false;
+let sessions = new Map(); // Map of sessionId -> { connected, qr, phoneNumber }
 
 // Letter-by-letter animation
 const titleLight = 'LIGHT';
@@ -80,12 +81,14 @@ async function loadStatus() {
     }
 }
 
-// Sessions
+// Sessions - load all sessions
 async function loadSessions() {
     const container = document.getElementById('sessionsList');
     try {
         const res = await fetch('/api/sessions');
         const data = await res.json();
+        sessions = new Map();
+        
         if (!data.sessions || data.sessions.length === 0) {
             container.innerHTML = `<div class="empty-state" style="text-align:center;padding:40px;color:#555">
                 <p style="font-size:14px">No sessions yet</p>
@@ -93,23 +96,28 @@ async function loadSessions() {
             </div>`;
             return;
         }
-        container.innerHTML = data.sessions.map(s => `
-            <div class="session-card ${s.isAlive ? 'connected' : 'disconnected'}">
-                <div class="session-info">
-                    <div class="session-avatar">${s.sessionId.charAt(0).toUpperCase()}</div>
-                    <div>
-                        <div class="session-name">${s.sessionId}</div>
-                        <div class="session-status ${s.isAlive ? 'connected' : 'disconnected'}">
-                            ${s.isAlive ? '● Connected' : '○ ' + (s.status || 'Disconnected')}
+        
+        container.innerHTML = data.sessions.map(s => {
+            sessions.set(s.sessionId, { connected: s.isAlive, phoneNumber: s.phoneNumber });
+            const isAlive = s.isAlive;
+            return `
+                <div class="session-card ${isAlive ? 'connected' : 'disconnected'}">
+                    <div class="session-info">
+                        <div class="session-avatar">${s.sessionId.charAt(0).toUpperCase()}</div>
+                        <div>
+                            <div class="session-name">${s.sessionId}</div>
+                            <div class="session-status ${isAlive ? 'connected' : 'disconnected'}">
+                                ${isAlive ? '● Connected' : '○ ' + (s.status || 'Disconnected')}
+                            </div>
                         </div>
                     </div>
+                    <div class="session-actions">
+                        ${!isAlive ? `<button class="btn-icon" onclick="reconnectSession('${s.sessionId}')" title="Reconnect">↻</button>` : ''}
+                        <button class="btn-icon danger" onclick="deleteSession('${s.sessionId}')" title="Disconnect">✕</button>
+                    </div>
                 </div>
-                <div class="session-actions">
-                    ${!s.isAlive ? `<button class="btn-icon" onclick="reconnectSession('${s.sessionId}')" title="Reconnect">↻</button>` : ''}
-                    <button class="btn-icon danger" onclick="deleteSession('${s.sessionId}')" title="Disconnect">✕</button>
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     } catch {
         container.innerHTML = '<div style="text-align:center;padding:20px;color:#ff5252">Failed to load sessions</div>';
     }
@@ -131,6 +139,7 @@ async function createSession() {
         });
         const data = await res.json();
         if (data.success) {
+            // Session created - show QR code
             currentSession = name;
             document.getElementById('createCard').classList.add('hidden');
             document.getElementById('qrCard').classList.remove('hidden');
@@ -147,7 +156,7 @@ async function createSession() {
     loader.style.display = 'none';
 }
 
-// Poll QR
+// Poll QR code for a specific session
 function pollQR() {
     if (pollInterval) clearInterval(pollInterval);
     pollInterval = setInterval(async () => {
@@ -167,7 +176,7 @@ function pollQR() {
     }, 2000);
 }
 
-// Cancel
+// Cancel session creation
 function cancelSession() {
     if (pollInterval) clearInterval(pollInterval);
     currentSession = null;
@@ -177,7 +186,7 @@ function cancelSession() {
     document.getElementById('step2').classList.remove('active');
 }
 
-// Success
+// Success state
 function showSuccess() {
     if (pollInterval) clearInterval(pollInterval);
     document.getElementById('qrCard').classList.add('hidden');
@@ -186,9 +195,10 @@ function showSuccess() {
     document.getElementById('step3').classList.add('active');
 }
 
-// Reset
+// Reset session UI
 function resetSession() {
     currentSession = null;
+    sessions.delete(currentSession);
     document.getElementById('successCard').classList.add('hidden');
     document.getElementById('createCard').classList.remove('hidden');
     document.getElementById('sessionName').value = '';
@@ -198,7 +208,7 @@ function resetSession() {
     switchTab('sessions');
 }
 
-// Reconnect
+// Reconnect session
 async function reconnectSession(id) {
     currentSession = id;
     document.getElementById('createCard').classList.add('hidden');
@@ -208,11 +218,12 @@ async function reconnectSession(id) {
     pollQR();
 }
 
-// Delete
+// Delete session
 async function deleteSession(id) {
     if (!confirm(`Disconnect session "${id}"?`)) return;
     try {
         await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
+        sessions.delete(id);
         loadSessions();
     } catch {}
 }

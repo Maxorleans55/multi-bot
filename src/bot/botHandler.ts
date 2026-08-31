@@ -684,7 +684,7 @@ export class BotHandler {
         const context = {
           socket: this.socket,
           sessionId: this.sessionId,
-          fromJid: from,
+          fromJid: simplified.user_id || from,
           fromMe: simplified.fromMe ?? false,
           pushName: simplified.pushName ?? undefined,
           messageTimestamp: simplified.messageTimeStamp ? Number(simplified.messageTimeStamp) : undefined,

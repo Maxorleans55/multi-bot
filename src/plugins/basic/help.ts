@@ -98,7 +98,7 @@ const helpCommand: CommandModule = {
       let helpText =
 `╭━━━━━━━━━━━━━━━━━━━╮
 ┃    🤖 *BOT MENU*     
-┃   ✦ _Staz AI Bot_ ✦
+┃   ✦ _Light Yagami_ ✦
 ╰━━━━━━━━━━━━━━━━━━━╯
 
 `;
