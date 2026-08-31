@@ -156,24 +156,47 @@ async function createSession() {
     loader.style.display = 'none';
 }
 
+// Wait for session QR to be ready
+async function waitForQR(sessionId) {
+    return new Promise(resolve => {
+        let attempts = 0;
+        const check = async () => {
+            try {
+                const res = await fetch(`/api/qr/${sessionId}`);
+                const data = await res.json();
+                if (data.connected) {
+                    showSuccess();
+                    return;
+                }
+                if (data.qr) {
+                    resolve(data.qr);
+                    return;
+                }
+            } catch {}
+            attempts++;
+            if (attempts < 15) {  // Try for 30 seconds (15 × 2s)
+                setTimeout(check, 2000);
+            } else {
+                // Fallback: try to get existing QR anyway
+                try {
+                    const res = await fetch(`/api/qr/${sessionId}`);
+                    const data = await res.json();
+                    if (data.qr) resolve(data.qr);
+                } catch {}
+            }
+        };
+        check();
+    });
+}
+
 // Poll QR code for a specific session
-function pollQR() {
+async function pollQR() {
     if (pollInterval) clearInterval(pollInterval);
-    pollInterval = setInterval(async () => {
-        if (!currentSession) return;
-        try {
-            const res = await fetch(`/api/qr/${currentSession}`);
-            const data = await res.json();
-            if (data.connected) {
-                showSuccess();
-                return;
-            }
-            if (data.qr) {
-                document.getElementById('qrContainer').innerHTML = `<img src="${data.qr}" alt="QR Code">`;
-                document.getElementById('qrStatus').innerHTML = '<span class="status-dot"></span><span>Waiting for scan...</span>';
-            }
-        } catch {}
-    }, 2000);
+    const qrCode = await waitForQR(currentSession);
+    if (qrCode) {
+        document.getElementById('qrContainer').innerHTML = `<img src="${qrCode}" alt="QR Code">`;
+        document.getElementById('qrStatus').innerHTML = '<span class="status-dot"></span><span>Waiting for scan...</span>';
+    }
 }
 
 // Cancel session creation
