@@ -6,7 +6,7 @@ import QRCode from 'qrcode';
 import sessionManager from './session/sessionManager.js';
 import { createSession, disconnectSession, getAllSessions } from './session/sessionHelper.js';
 import prisma from './database/prisma.js';
-import { log } from '../utils/logger.js';
+import { log } from './utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

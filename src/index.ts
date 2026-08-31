@@ -13,9 +13,9 @@ if (process.platform === 'win32') {
 dotenv.config();
 
 // Start web server (after dotenv so env vars are available)
-import('./server.js').catch((err) => {
-  console.error('⚠️  Web server failed to start:', err.message || err);
-});
+import('./server.js')
+  .then(() => console.log('✅ Web server module loaded'))
+  .catch((err) => console.error('❌ Web server failed to start:', err?.message || err));
 
 async function main() {
   console.log('🚀 Starting Bot-Baileys-AI...');
