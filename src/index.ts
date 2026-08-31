@@ -3,8 +3,6 @@ import { createSession, loadActiveSessions, disconnectAllSessions, getAllSession
 import prisma from './database/prisma.js';
 import { registerAllTools } from './tools/index.js';
 import { premiumService } from './services/premiumService.js';
-import './server.js';
-
 // Set console encoding to UTF-8 for emoji support on Windows
 if (process.platform === 'win32') {
   process.stdout.setEncoding('utf-8');
@@ -13,6 +11,11 @@ if (process.platform === 'win32') {
 
 // Load environment variables
 dotenv.config();
+
+// Start web server (after dotenv so env vars are available)
+import('./server.js').catch((err) => {
+  console.error('⚠️  Web server failed to start:', err.message || err);
+});
 
 async function main() {
   console.log('🚀 Starting Bot-Baileys-AI...');
