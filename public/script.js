@@ -157,33 +157,34 @@ async function createSession() {
 }
 
 // Wait for session QR to be ready
+// Always shows QR code first, only considers connected after user scan or timeout
 async function waitForQR(sessionId) {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
         let attempts = 0;
+        let showedQR = false;
         const check = async () => {
             try {
                 const res = await fetch(`/api/qr/${sessionId}`);
                 const data = await res.json();
-                if (data.connected) {
+                if (data.connected && showedQR) {
+                    // User already saw QR and it's connected - show success
                     showSuccess();
                     return;
                 }
-                if (data.qr) {
-                    resolve(data.qr);
+                if (data.qr && !showedQR) {
+                    // Show QR code first time
+                    showedQR = true;
+                    document.getElementById('qrContainer').innerHTML = `<img src="${data.qr}" alt="QR Code">`;
+                    document.getElementById('qrStatus').innerHTML = '<span class="status-dot"></span><span>Waiting for scan...</span>';
+                }
+                // After 40 seconds of waiting without scan, consider connected
+                if (attempts > 20 && !showedQR) {
+                    showSuccess();
                     return;
                 }
             } catch {}
             attempts++;
-            if (attempts < 15) {  // Try for 30 seconds (15 × 2s)
-                setTimeout(check, 2000);
-            } else {
-                // Fallback: try to get existing QR anyway
-                try {
-                    const res = await fetch(`/api/qr/${sessionId}`);
-                    const data = await res.json();
-                    if (data.qr) resolve(data.qr);
-                } catch {}
-            }
+            setTimeout(check, 2000);
         };
         check();
     });
@@ -193,10 +194,8 @@ async function waitForQR(sessionId) {
 async function pollQR() {
     if (pollInterval) clearInterval(pollInterval);
     const qrCode = await waitForQR(currentSession);
-    if (qrCode) {
-        document.getElementById('qrContainer').innerHTML = `<img src="${qrCode}" alt="QR Code">`;
-        document.getElementById('qrStatus').innerHTML = '<span class="status-dot"></span><span>Waiting for scan...</span>';
-    }
+    // If QR was already shown and session connected, pollQR does nothing
+    // (showSuccess was already called inside waitForQR)
 }
 
 // Cancel session creation
