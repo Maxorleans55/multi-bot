@@ -73,8 +73,7 @@ async function loadStatus() {
         const mins = Math.floor(data.uptime / 60);
         const hrs = Math.floor(mins / 60);
         document.getElementById('uptime').textContent = hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
-        const mem = Math.round(process?.memoryUsage?.()?.heapUsed / 1024 / 1024 || 0);
-        document.getElementById('memUsage').textContent = mem > 0 ? `${mem}MB` : 'N/A';
+        document.getElementById('memUsage').textContent = `${Math.round(performance?.memory?.usedJSHeapSize / 1024 / 1024) || 'N/A'}MB`;
     } catch {
         document.getElementById('botStatus').textContent = 'Offline';
         document.getElementById('pulseDot').className = 'pulse-dot';

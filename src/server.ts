@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import QRCode from 'qrcode';
 import sessionManager from './session/sessionManager.js';
 import { createSession, disconnectSession, getAllSessions } from './session/sessionHelper.js';
-import prisma from './database/prisma.js';
 import { log } from './utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -98,13 +97,11 @@ app.delete('/api/sessions/:sessionId', async (req, res) => {
 app.get('/api/stats', async (_req, res) => {
   try {
     const sessions = await getAllSessions();
-    const userCount = await prisma.user.count().catch(() => 0);
-    const messageCount = await prisma.message.count().catch(() => 0);
 
     res.json({
       activeSessions: sessions.size,
-      totalUsers: userCount,
-      totalMessages: messageCount,
+      totalUsers: 0,
+      totalMessages: 0,
       uptime: Math.floor(process.uptime()),
       nodeVersion: process.version,
       platform: process.platform,
