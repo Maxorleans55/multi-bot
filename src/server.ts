@@ -72,12 +72,10 @@ app.post('/api/sessions', async (req, res) => {
       return res.status(400).json({ error: 'Session ID required' });
     }
 
-    const existing = await sessionManager.getSession(sessionId);
-    if (existing) {
-      return res.json({ success: true, sessionId, message: 'Session already exists' });
-    }
+    // Force clear existing session data to generate fresh QR code
+    await sessionManager.disconnectSession(sessionId);
+    await createSession(sessionId, true);  // forceClear = true
 
-    await createSession(sessionId);
     res.json({ success: true, sessionId, message: 'Session created. Check QR code.' });
   } catch (error) {
     res.status(500).json({ error: `Failed to create session: ${error}` });
