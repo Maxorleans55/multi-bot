@@ -3,6 +3,7 @@ import { createSession, loadActiveSessions, disconnectAllSessions, getAllSession
 import prisma from './database/prisma.js';
 import { registerAllTools } from './tools/index.js';
 import { premiumService } from './services/premiumService.js';
+import './server.js';
 
 // Set console encoding to UTF-8 for emoji support on Windows
 if (process.platform === 'win32') {

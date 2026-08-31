@@ -39,6 +39,7 @@
     "axios": "^1.19.0",
     "cheerio": "^1.2.0",
     "dotenv": "^17.4.2",
+    "express": "^4.21.0",
     "link-preview-js": "^3.0.0",
     "moment": "^2.30.1",
     "nexo-aio-downloader": "github:Stazyu/nexo-aio-downloader",

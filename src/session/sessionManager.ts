@@ -39,6 +39,7 @@ export class SessionManager {
     })
   );
   private groupCache = new NodeCache({ stdTTL: 5 * 60, useClones: false });
+  private qrStore: Map<string, string> = new Map();
 
   async createSession(sessionId: string, forceClear = false): Promise<WASocket> {
     // Check if session already exists
@@ -183,6 +184,7 @@ export class SessionManager {
       if (qr) {
         log.info(`QR Code for session ${sessionId}:`);
         log.info(await QRCode.toString(qr, { type: 'terminal', small: true }));
+        this.qrStore.set(sessionId, qr);
         await this.updateWaSessionMeta(sessionId, {
           status: 'qr',
           isActive: false,
@@ -238,6 +240,7 @@ export class SessionManager {
         }
       } else if (connection === 'open') {
         this.reconnectAttempts.delete(sessionId);
+        this.qrStore.delete(sessionId);
         log.info(`Connection opened for session ${sessionId}`);
 
         const userId = socket.user?.id;
@@ -261,6 +264,14 @@ export class SessionManager {
 
   async getAllSessions(): Promise<Map<string, WASocket>> {
     return this.sessions;
+  }
+
+  getQR(sessionId: string): string | undefined {
+    return this.qrStore.get(sessionId);
+  }
+
+  isConnected(sessionId: string): boolean {
+    return this.sessions.has(sessionId);
   }
 
   async disconnectSession(sessionId: string): Promise<void> {
