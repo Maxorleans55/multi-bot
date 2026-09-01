@@ -11,26 +11,29 @@ body {
 
 /* ── Background ──────────────────────────────────────── */
 .bg {
-    position: fixed; inset: -20px;
+    position: fixed; inset: -40px;
     background: url('light-yagami.png') center/cover no-repeat;
     z-index: -2;
-    animation: bgDrift 30s ease-in-out infinite alternate;
+    animation: kenBurns 20s ease-in-out infinite alternate;
+    will-change: transform;
 }
-@keyframes bgDrift {
-    0% { transform: scale(1.05) translate(0, 0); }
-    50% { transform: scale(1.08) translate(-10px, -5px); }
-    100% { transform: scale(1.05) translate(5px, -10px); }
+@keyframes kenBurns {
+    0% { transform: scale(1.1) translate(0%, 0%); }
+    25% { transform: scale(1.15) translate(-2%, -1%); }
+    50% { transform: scale(1.2) translate(-1%, -2%); }
+    75% { transform: scale(1.15) translate(1%, -1%); }
+    100% { transform: scale(1.1) translate(0%, 0%); }
 }
 .overlay {
     position: fixed; inset: 0;
-    background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0.95) 100%);
+    background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.75) 40%, rgba(0,0,0,0.93) 100%);
     z-index: -1;
-    animation: overlayShift 15s ease-in-out infinite alternate;
+    animation: overlayPulse 10s ease-in-out infinite alternate;
 }
-@keyframes overlayShift {
-    0% { opacity: 0.85; }
-    50% { opacity: 0.95; }
-    100% { opacity: 0.88; }
+@keyframes overlayPulse {
+    0% { background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.75) 40%, rgba(0,0,0,0.93) 100%); }
+    50% { background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0.95) 100%); }
+    100% { background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.72) 40%, rgba(0,0,0,0.92) 100%); }
 }
 
 /* Particles */

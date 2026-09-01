@@ -393,10 +393,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Parallax on mouse move
+    let mouseX = 0, mouseY = 0, currentX = 0, currentY = 0;
     document.addEventListener('mousemove', e => {
-        const x = (e.clientX / window.innerWidth - 0.5) * 10;
-        const y = (e.clientY / window.innerHeight - 0.5) * 10;
-        const bg = document.querySelector('.bg');
-        if (bg) bg.style.transform = `scale(1.05) translate(${x}px, ${y}px)`;
+        mouseX = (e.clientX / window.innerWidth - 0.5) * 30;
+        mouseY = (e.clientY / window.innerHeight - 0.5) * 30;
     });
+    function animateParallax() {
+        currentX += (mouseX - currentX) * 0.05;
+        currentY += (mouseY - currentY) * 0.05;
+        const bg = document.querySelector('.bg');
+        if (bg) bg.style.transform = `scale(1.15) translate(${currentX}px, ${currentY}px)`;
+        requestAnimationFrame(animateParallax);
+    }
+    animateParallax();
 });
