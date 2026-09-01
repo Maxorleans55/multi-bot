@@ -2,6 +2,7 @@ allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
   '@stazyu/baileys': true
+  '@whiskeysockets/baileys': set this to true or false
   canvas: true
   esbuild: true
   ffmpeg-static: true

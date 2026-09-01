@@ -7,7 +7,7 @@ const translateCmd: CommandModule = {
     aliases: ['tr'],
     description: 'Translate text to another language',
     usage: '!translate <lang> <text>',
-    category: 'basic',
+    category: 'tools',
   },
   handler: async function (context, args: string[]): Promise<void> {
     const lang = args[0];

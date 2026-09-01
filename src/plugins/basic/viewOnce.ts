@@ -19,7 +19,7 @@ const vvCmd: CommandModule = {
     name: 'vv',
     description: 'Save view once media',
     usage: '!vv (reply to a view once message)',
-    category: 'basic',
+    category: 'tools',
   },
   handler: async function (context, _args: string[]): Promise<void> {
     const chatId = context.fromJid;

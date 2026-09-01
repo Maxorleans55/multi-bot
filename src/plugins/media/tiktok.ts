@@ -69,7 +69,7 @@ const tiktokCommand: CommandModule = {
   config: {
     name: 'tiktok',
     aliases: ['tt', 'tiktokdl'],
-    description: 'Download video from TikTok. Gunakan --v2 atau --v3 untuk versi lain',
+    description: 'Download video from TikTok. Use --v2 or --v3 for alternative versions',
     usage: '!tiktok <url> [--v2|--v3]',
     category: 'media',
   },

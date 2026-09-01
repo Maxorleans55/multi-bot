@@ -5,7 +5,7 @@ const calcCmd: CommandModule = {
     name: 'calc',
     description: 'Calculator',
     usage: '!calc <expression>',
-    category: 'basic',
+    category: 'tools',
   },
   handler: async function (context, args: string[]): Promise<void> {
     const expression = args.join(' ');

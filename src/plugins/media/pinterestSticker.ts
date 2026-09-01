@@ -93,9 +93,9 @@ function parseArgs(args: string[]): ParsedArgs | null {
 const pinterestStickerCommand: CommandModule = {
   config: {
     name: 'pinsticker',
-    aliases: ['pinstiker', 'pintereststicker', 'pintereststiker', 'pin'],
-    description: 'Buat sticker dari URL Pinterest atau kata kunci pencarian',
-    usage: '!pinsticker <url/kata kunci> [pack|author] [-full|-cropped|-default] [-i nomor] [--pack nama] [--author nama]',
+    aliases: ['pinstiker', 'pintereststicker', 'pintereststiker'],
+    description: 'Create sticker from Pinterest URL or search keyword',
+    usage: '!pinsticker <url/keyword> [pack|author] [-full|-cropped|-default] [-i number] [--pack name] [--author name]',
     category: 'media',
   },
   handler: async function (context, args: string[]): Promise<void> {

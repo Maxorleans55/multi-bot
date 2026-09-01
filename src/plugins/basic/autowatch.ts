@@ -5,7 +5,7 @@ const autowatchCmd: CommandModule = {
     name: 'autowatch',
     description: 'Toggle auto view status updates',
     usage: '!autowatch',
-    category: 'basic',
+    category: 'tools',
   },
   handler: async function (context, _args: string[]): Promise<void> {
     const sender = context.simplified?.user_id || context.fromJid;

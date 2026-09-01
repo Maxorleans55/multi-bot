@@ -8,7 +8,7 @@ const reportbugCommand: CommandModule = {
     aliases: ['bug', 'lapor', 'report'],
     description: 'Report a bug or issue to the bot owner',
     usage: '!reportbug <bug description>',
-    category: 'basic',
+    category: 'general',
   },
   handler: async function (context, args: string[]): Promise<void> {
     const message = args.join(' ').trim();

@@ -5,7 +5,7 @@ const binaryCmd: CommandModule = {
     name: 'binary',
     description: 'Convert text to binary',
     usage: '!binary <text>',
-    category: 'basic',
+    category: 'tools',
   },
   handler: async function (context, args: string[]): Promise<void> {
     const text = args.join(' ');

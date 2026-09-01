@@ -5,7 +5,7 @@ const jokeCmd: CommandModule = {
     name: 'joke',
     description: 'Random joke',
     usage: '!joke',
-    category: 'basic',
+    category: 'tools',
   },
   handler: async function (context, _args: string[]): Promise<void> {
     const jokes = [

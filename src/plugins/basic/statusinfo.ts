@@ -5,7 +5,7 @@ const statusinfoCmd: CommandModule = {
     name: 'statusinfo',
     description: 'Check your status settings',
     usage: '!statusinfo',
-    category: 'basic',
+    category: 'general',
   },
   handler: async function (context, _args: string[]): Promise<void> {
     const sender = context.simplified?.user_id || context.fromJid;

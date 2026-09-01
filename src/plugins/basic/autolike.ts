@@ -5,7 +5,7 @@ const autolikeCmd: CommandModule = {
     name: 'autolike',
     description: 'Toggle auto react to status updates',
     usage: '!autolike',
-    category: 'basic',
+    category: 'tools',
   },
   handler: async function (context, _args: string[]): Promise<void> {
     const sender = context.simplified?.user_id || context.fromJid;

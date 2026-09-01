@@ -45,7 +45,7 @@ const statusCommand: CommandModule = {
     aliases: ['s'],
     description: 'Check bot status',
     usage: '!status',
-    category: 'basic',
+    category: 'general',
   },
   handler: async function (context, args: string[]): Promise<void> {
     // Calculate CPU usage

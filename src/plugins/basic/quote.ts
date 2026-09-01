@@ -5,7 +5,7 @@ const quoteCmd: CommandModule = {
     name: 'quote',
     description: 'Random quote',
     usage: '!quote',
-    category: 'basic',
+    category: 'tools',
   },
   handler: async function (context, _args: string[]): Promise<void> {
     const quotes = [

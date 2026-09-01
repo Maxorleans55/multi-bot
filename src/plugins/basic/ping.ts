@@ -7,7 +7,7 @@ const pingCommand: CommandModule = {
     aliases: ['p'],
     description: 'Test bot response',
     usage: '!ping',
-    category: 'basic',
+    category: 'general',
   },
   handler: async function (context, args: string[]): Promise<void> {
     const startTime = context.simplified?.timeStampHandler!;

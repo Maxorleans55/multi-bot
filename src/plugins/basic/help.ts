@@ -5,13 +5,13 @@ import { readFileSync } from 'fs';
 import sharp from 'sharp';
 
 const categoryIcons: Record<string, string> = {
-  basic: '📂',
-  ai: '🤖',
+  general: '🤖',
+  tools: '🧰',
+  ai: '🧠',
+  media: '📥',
   group: '👥',
-  media: '🎬',
   owner: '👑',
   session: '🔐',
-  general: '📁',
 };
 
 interface CommandEntry {
@@ -25,7 +25,7 @@ const helpCommand: CommandModule = {
     aliases: ['h', 'menu'],
     description: 'Show all available commands',
     usage: '!help',
-    category: 'basic',
+    category: 'general',
   },
   handler: async function (context, args: string[]): Promise<void> {
     const pm = context.pluginManager;
@@ -93,7 +93,12 @@ const helpCommand: CommandModule = {
 
       let menuText = '';
 
-      for (const [category, commands] of categories.entries()) {
+      const categoryOrder = ['general', 'tools', 'ai', 'media', 'group', 'owner', 'session'];
+      const sortedCategories = categoryOrder
+        .filter(cat => categories.has(cat))
+        .map(cat => [cat, categories.get(cat)!] as const);
+
+      for (const [category, commands] of sortedCategories) {
         const icon = categoryIcons[category] || '📁';
         const catName = category.charAt(0).toUpperCase() + category.slice(1);
 
@@ -116,7 +121,6 @@ ${commands.map(cmd => {
 ┃ ✦ *Session:* ${context.sessionId}
 ┃ ✦ *Prefix:* \`${matchedPrefix}\`
 ┃ ✦ *Owner:* Max Shadows
-┃ ✦ *Use* \`${matchedPrefix}help <cmd>\` *for details*
 ┃
 ╰━━━━━━━━━━━━━━━━━━━╯`;
 

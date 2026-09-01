@@ -3,7 +3,7 @@ import type { CommandModule } from '../../types/index.js';
 const setGroupCommand: CommandModule = {
   config: {
     name: 'setgroup',
-    aliases: ['close', 'open', 'tutup', 'buka'],
+    aliases: ['close', 'open'],
     description: 'Open or close group (admin only)',
     usage: '!close or !open',
     category: 'group',

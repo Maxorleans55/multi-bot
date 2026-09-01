@@ -7,7 +7,7 @@ const changelogCommand: CommandModule = {
     aliases: ['cl', 'update', 'perubahan'],
     description: 'See what\'s new in the bot',
     usage: '!changelog',
-    category: 'basic',
+    category: 'general',
   },
   handler: async function (context): Promise<void> {
     const prefixes = getPrefixes();

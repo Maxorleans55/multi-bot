@@ -3,7 +3,7 @@ import type { CommandModule } from '../../types/index.js';
 const hidetagCommand: CommandModule = {
   config: {
     name: 'hidetag',
-    aliases: ['h', 'ht', 'tagall'],
+    aliases: ['htag', 'ht', 'tagall'],
     description: 'Send a hidden tag message to all group members (admin only)',
     usage: '!hidetag <message>',
     category: 'group',

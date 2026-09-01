@@ -6,7 +6,7 @@ const defineCmd: CommandModule = {
     name: 'define',
     description: 'Define a word',
     usage: '!define <word>',
-    category: 'basic',
+    category: 'tools',
   },
   handler: async function (context, args: string[]): Promise<void> {
     const word = args[0];

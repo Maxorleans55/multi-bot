@@ -81,8 +81,8 @@ const telegramStickerPackCommand: CommandModule = {
   config: {
     name: 'tgstickerpack',
     aliases: ['tgpack', 'tgstickers', 'tgs', 'telegramstickerpack', 'tgstikerpack'],
-    description: 'Convert Telegram sticker pack (t.me/addstickers) menjadi WhatsApp sticker pack',
-    usage: '!tgstickerpack <url pack t.me/addstickers | nama-pack> [Nama|Publisher] [--pack nama] [--author nama]',
+    description: 'Convert Telegram sticker pack (t.me/addstickers) to WhatsApp sticker pack',
+    usage: '!tgstickerpack <url/pack-name> [Name|Publisher] [--pack name] [--author name]',
     category: 'media',
     cooldown: 15,
   },

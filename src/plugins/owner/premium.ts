@@ -96,7 +96,7 @@ const command: CommandModule = {
         for (const u of premiumUsers.slice(0, 20)) {
           lines.push(`• \`${u.userId.split('@')[0]}\` — *${u.tier.toUpperCase()}* (${u.pushName || '-'})`);
         }
-        if (premiumUsers.length > 20) lines.push(`...dan ${premiumUsers.length - 20} lainnya`);
+        if (premiumUsers.length > 20) lines.push(`...and ${premiumUsers.length - 20} more`);
         await context.socket.sendMessage(from, { text: lines.join('\n') });
         break;
       }

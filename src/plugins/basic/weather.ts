@@ -6,7 +6,7 @@ const weatherCmd: CommandModule = {
     name: 'weather',
     description: 'Get weather info',
     usage: '!weather <city>',
-    category: 'basic',
+    category: 'tools',
   },
   handler: async function (context, args: string[]): Promise<void> {
     const city = args.join(' ');

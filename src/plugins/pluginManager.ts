@@ -317,7 +317,7 @@ export class PluginManager {
           if (userTier === 'free') {
             log.info(`🚫 [PluginManager] Permission denied: premium only for "${resolvedCommand}" (tier: ${userTier})`);
             await context.socket.sendMessage(context.fromJid, {
-              text: '⭐ *Premium Only!*\n\nPerintah ini hanya tersedia untuk pengguna *Premium* / *Pro*.\nHubungi owner untuk upgrade ke Premium.',
+              text: '⭐ *Premium Only!*\n\nThis command is only available for *Premium* / *Pro* users.\nContact the owner to upgrade to Premium.',
             }).catch(() => {});
             return true;
           }
