@@ -25,10 +25,15 @@ app.get('/api/qr/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
     const qr = sessionManager.getQR(sessionId);
+    const pairingCode = sessionManager.getPairingCode(sessionId);
     const connected = sessionManager.isConnected(sessionId);
 
     if (connected) {
       return res.json({ qr: null, connected: true });
+    }
+
+    if (pairingCode) {
+      return res.json({ qr: null, connected: false, pairingCode });
     }
 
     if (qr) {
@@ -39,6 +44,25 @@ app.get('/api/qr/:sessionId', async (req, res) => {
     return res.json({ qr: null, connected: false });
   } catch (error) {
     res.status(500).json({ error: 'Failed to get QR code' });
+  }
+});
+
+app.post('/api/pairing/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) {
+      return res.status(400).json({ error: 'Phone number required' });
+    }
+    const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+    const code = await sessionManager.requestPairingCode(sessionId, cleanPhone);
+    if (code) {
+      res.json({ success: true, code });
+    } else {
+      res.status(500).json({ error: 'Failed to generate pairing code. Is the session active?' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to request pairing code' });
   }
 });
 

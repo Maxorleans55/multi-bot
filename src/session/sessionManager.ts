@@ -41,6 +41,7 @@ export class SessionManager {
   );
   private groupCache = new NodeCache({ stdTTL: 5 * 60, useClones: false });
   private qrStore: Map<string, string> = new Map();
+  private pairingCodeStore: Map<string, string> = new Map();
 
   async createSession(sessionId: string, forceClear = false): Promise<WASocket> {
     // Check if session already exists
@@ -243,6 +244,7 @@ export class SessionManager {
       } else if (connection === 'open') {
         this.reconnectAttempts.delete(sessionId);
         this.qrStore.delete(sessionId);
+        this.pairingCodeStore.delete(sessionId);
         this.connectedSessions.add(sessionId);
         log.info(`Connection opened for session ${sessionId}`);
 
@@ -271,6 +273,24 @@ export class SessionManager {
 
   getQR(sessionId: string): string | undefined {
     return this.qrStore.get(sessionId);
+  }
+
+  getPairingCode(sessionId: string): string | undefined {
+    return this.pairingCodeStore.get(sessionId);
+  }
+
+  async requestPairingCode(sessionId: string, phoneNumber: string): Promise<string | null> {
+    const socket = this.sessions.get(sessionId);
+    if (!socket) return null;
+    try {
+      const code = await socket.requestPairingCode(phoneNumber);
+      this.pairingCodeStore.set(sessionId, code);
+      log.info(`🔗 [SessionManager] Pairing code for ${sessionId}: ${code}`);
+      return code;
+    } catch (error) {
+      log.error(`[SessionManager] Failed to request pairing code for ${sessionId}:`, error as object);
+      return null;
+    }
   }
 
   isConnected(sessionId: string): boolean {

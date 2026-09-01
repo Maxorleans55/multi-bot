@@ -123,10 +123,12 @@ async function loadSessions() {
     }
 }
 
-// Create session
+// Create session - uses phone pairing
 async function createSession() {
     const name = document.getElementById('sessionName').value.trim();
-    if (!name) return;
+    const phone = document.getElementById('phoneNumber').value.trim();
+    if (!name) return alert('Please enter a session name');
+    if (!phone) return alert('Please enter your phone number');
     const btn = document.getElementById('btnText');
     const loader = document.getElementById('btnLoader');
     btn.textContent = 'Creating...';
@@ -139,21 +141,77 @@ async function createSession() {
         });
         const data = await res.json();
         if (data.success) {
-            // Session created - show QR code
             currentSession = name;
             document.getElementById('createCard').classList.add('hidden');
-            document.getElementById('qrCard').classList.remove('hidden');
             document.getElementById('step1').classList.add('completed');
             document.getElementById('step2').classList.add('active');
-            pollQR();
+            // Request pairing code
+            await requestPairingCode(name, phone);
         } else {
             alert(data.error || 'Failed to create session');
         }
     } catch {
         alert('Network error');
     }
-    btn.textContent = 'Create Session';
+    btn.textContent = 'Create & Link';
     loader.style.display = 'none';
+}
+
+// Request pairing code from server
+async function requestPairingCode(sessionId, phoneNumber) {
+    try {
+        const res = await fetch(`/api/pairing/${sessionId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phoneNumber })
+        });
+        const data = await res.json();
+        if (data.success && data.code) {
+            // Show pairing code card
+            document.getElementById('pairingCard').classList.remove('hidden');
+            document.getElementById('step2Label').textContent = 'Enter Code';
+            document.getElementById('pairingCode').textContent = data.code;
+            document.getElementById('pairingStatusText').textContent = 'Enter this code on your phone...';
+            waitForPairing(sessionId);
+        } else {
+            // Fallback to QR code
+            console.log('Pairing code failed, falling back to QR');
+            document.getElementById('qrCard').classList.remove('hidden');
+            document.getElementById('step2Label').textContent = 'Scan QR';
+            waitForQR(sessionId);
+        }
+    } catch {
+        // Fallback to QR code
+        document.getElementById('qrCard').classList.remove('hidden');
+        document.getElementById('step2Label').textContent = 'Scan QR';
+        waitForQR(sessionId);
+    }
+}
+
+// Wait for pairing code to be linked
+async function waitForPairing(sessionId) {
+    return new Promise((resolve) => {
+        let attempts = 0;
+        const maxAttempts = 60; // 2 minutes
+        const check = async () => {
+            try {
+                const res = await fetch(`/api/qr/${sessionId}`);
+                const data = await res.json();
+                if (data.connected) {
+                    document.getElementById('pairingStatusText').textContent = 'Connected!';
+                    showSuccess();
+                    return;
+                }
+            } catch {}
+            attempts++;
+            if (attempts >= maxAttempts) {
+                document.getElementById('pairingStatusText').textContent = 'Timed out. Try again.';
+                return;
+            }
+            setTimeout(check, 2000);
+        };
+        check();
+    });
 }
 
 // Wait for session QR to be ready
@@ -202,10 +260,12 @@ async function pollQR() {
 function cancelSession() {
     if (pollInterval) clearInterval(pollInterval);
     currentSession = null;
+    document.getElementById('pairingCard').classList.add('hidden');
     document.getElementById('qrCard').classList.add('hidden');
     document.getElementById('createCard').classList.remove('hidden');
     document.getElementById('step1').classList.remove('completed');
     document.getElementById('step2').classList.remove('active');
+    document.getElementById('step2Label').textContent = 'Link Device';
 }
 
 // Success state
@@ -222,10 +282,13 @@ function resetSession() {
     currentSession = null;
     sessions.delete(currentSession);
     document.getElementById('successCard').classList.add('hidden');
+    document.getElementById('pairingCard').classList.add('hidden');
     document.getElementById('createCard').classList.remove('hidden');
     document.getElementById('sessionName').value = '';
+    document.getElementById('phoneNumber').value = '';
     document.getElementById('step1').classList.remove('completed');
     document.getElementById('step2').classList.remove('active');
+    document.getElementById('step2Label').textContent = 'Link Device';
     document.getElementById('step3').classList.remove('active');
     switchTab('sessions');
 }
@@ -234,9 +297,11 @@ function resetSession() {
 async function reconnectSession(id) {
     currentSession = id;
     document.getElementById('createCard').classList.add('hidden');
+    document.getElementById('pairingCard').classList.add('hidden');
     document.getElementById('qrCard').classList.remove('hidden');
     document.getElementById('step1').classList.add('completed');
     document.getElementById('step2').classList.add('active');
+    document.getElementById('step2Label').textContent = 'Scan QR';
     pollQR();
 }
 

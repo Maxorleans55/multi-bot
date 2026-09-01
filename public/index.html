@@ -92,7 +92,7 @@
                 <div class="step-line"></div>
                 <div class="step" id="step2">
                     <div class="step-number">2</div>
-                    <span>Scan QR</span>
+                    <span id="step2Label">Link Device</span>
                 </div>
                 <div class="step-line"></div>
                 <div class="step" id="step3">
@@ -104,19 +104,40 @@
             <!-- Create Session -->
             <div class="card" id="createCard">
                 <h2>Create New Session</h2>
-                <p class="card-desc">Enter a session name to start a new WhatsApp connection</p>
+                <p class="card-desc">Enter a session name and your phone number</p>
 
                 <div class="input-group">
-                    <input type="text" id="sessionName" placeholder="e.g. friend1, work, gaming" maxlength="30">
+                    <input type="text" id="sessionName" placeholder="Session name (e.g. friend1)" maxlength="30">
+                </div>
+
+                <div class="input-group" style="margin-top:12px">
+                    <input type="tel" id="phoneNumber" placeholder="Phone number (e.g. 6281234567890)" maxlength="15">
                 </div>
 
                 <button class="btn-primary" onclick="createSession()">
-                    <span id="btnText">Create Session</span>
+                    <span id="btnText">Create & Link</span>
                     <span id="btnLoader" class="loader" style="display:none"></span>
                 </button>
             </div>
 
-            <!-- QR Code -->
+            <!-- Linking Code -->
+            <div class="card hidden" id="pairingCard">
+                <h2>Enter This Code</h2>
+                <p class="card-desc">Open WhatsApp → Settings → Linked Devices → Link a Device → Link with Phone Number</p>
+
+                <div class="pairing-code-container" id="pairingCodeContainer">
+                    <div class="pairing-code" id="pairingCode">----</div>
+                </div>
+
+                <div class="status" id="pairingStatus">
+                    <span class="status-dot"></span>
+                    <span id="pairingStatusText">Waiting for linking...</span>
+                </div>
+
+                <button class="btn-secondary" onclick="cancelSession()">Cancel</button>
+            </div>
+
+            <!-- QR Code (fallback) -->
             <div class="card hidden" id="qrCard">
                 <h2>Scan QR Code</h2>
                 <p class="card-desc">Open WhatsApp → Settings → Linked Devices → Link a Device</p>
