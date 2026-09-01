@@ -1,10 +1,7 @@
 import type { CommandModule, CommandConfig } from '../../types/index.js';
 import { getPrefixes, isOwner } from '../../config/botConfig.js';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { readFileSync } from 'fs';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const categoryIcons: Record<string, string> = {
   basic: '📂',
@@ -121,7 +118,7 @@ ${commands.map(cmd => {
 ╰━━━━━━━━━━━━━━━━━━━╯`;
 
       try {
-        const imagePath = join(__dirname, '..', '..', '..', 'public', 'light-yagami.png');
+        const imagePath = join(process.cwd(), 'public', 'light-yagami.png');
         const imageBuffer = readFileSync(imagePath);
         await context.socket.sendMessage(context.fromJid, {
           image: imageBuffer,
