@@ -30,7 +30,7 @@ export interface ValidationOptions {
 
 const DEFAULT_OPTIONS: Required<ValidationOptions> = {
   maxBodyLength: 65536,
-  maxMessageAgeSeconds: 300,
+  maxMessageAgeSeconds: 3600,
   maxFutureOffsetSeconds: 30,
   allowSelfMessages: true,
 };
