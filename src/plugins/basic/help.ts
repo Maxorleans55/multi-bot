@@ -119,12 +119,16 @@ ${commands.map(cmd => {
 
       try {
         const imagePath = join(process.cwd(), 'public', 'light-yagami.png');
+        console.log(`[help] Loading image from: ${imagePath}`);
         const imageBuffer = readFileSync(imagePath);
+        console.log(`[help] Image loaded, size: ${imageBuffer.length} bytes`);
         await context.socket.sendMessage(context.fromJid, {
           image: imageBuffer,
           caption: menuText,
         });
-      } catch {
+        console.log(`[help] Image + menu sent successfully`);
+      } catch (err) {
+        console.error(`[help] Failed to load/send image, falling back to text:`, err);
         await context.socket.sendMessage(context.fromJid, {
           text: menuText,
         });
