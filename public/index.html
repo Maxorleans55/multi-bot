@@ -5,76 +5,83 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Light Yagami Bot - Dashboard</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
-    <div class="bg-image"></div>
-    <div class="bg-overlay"></div>
+    <div class="bg-gradient"></div>
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
 
-    <audio id="bgm" loop>
+    <audio id="bgm" loop muted>
         <source src="bgm.m4a" type="audio/mp4">
     </audio>
 
-    <button class="music-btn" id="musicBtn" onclick="toggleMusic()">
-        <svg id="musicIcon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-        </svg>
-        <span id="musicLabel">Play Music</span>
-    </button>
-
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <div class="logo-mark">L</div>
-            <h1 class="title">
-                <span class="title-light" id="textLight"></span>
-                <span class="title-yagami" id="textYagami"></span>
-            </h1>
-            <p class="tagline">JUSTICE IS WRITTEN BY ME</p>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <div class="nav-logo">L</div>
+            <span class="nav-title">Light Yagami</span>
         </div>
-
-        <!-- Status Bar -->
-        <div class="status-bar" id="statusBar">
-            <div class="status-indicator">
-                <span class="pulse-dot" id="pulseDot"></span>
+        <div class="nav-actions">
+            <button class="music-btn" id="musicBtn" onclick="toggleMusic()">
+                <i class="fas fa-volume-xmark"></i>
+            </button>
+            <div class="nav-status" id="navStatus">
+                <span class="status-dot" id="pulseDot"></span>
                 <span id="botStatus">Connecting...</span>
             </div>
-            <div class="status-stats">
-                <span id="uptime">0m</span>
-                <span class="divider">|</span>
-                <span id="memUsage">0MB</span>
-            </div>
         </div>
+    </nav>
 
-        <!-- Tabs -->
+    <main class="container">
+        <section class="hero">
+            <div class="hero-badge">WHATSAPP BOT</div>
+            <h1 class="hero-title">
+                <span class="gradient-text">Light Yagami</span>
+            </h1>
+            <p class="hero-subtitle">Justice is written by me</p>
+        </section>
+
+        <section class="stats-row">
+            <div class="stat-pill">
+                <i class="fas fa-mobile-screen"></i>
+                <span class="stat-value" id="statSessions">0</span>
+                <span class="stat-label">Sessions</span>
+            </div>
+            <div class="stat-pill">
+                <i class="fas fa-users"></i>
+                <span class="stat-value" id="statUsers">0</span>
+                <span class="stat-label">Users</span>
+            </div>
+            <div class="stat-pill">
+                <i class="fas fa-message"></i>
+                <span class="stat-value" id="statMessages">0</span>
+                <span class="stat-label">Messages</span>
+            </div>
+            <div class="stat-pill">
+                <i class="fas fa-clock"></i>
+                <span class="stat-value" id="statUptime">0m</span>
+                <span class="stat-label">Uptime</span>
+            </div>
+        </section>
+
         <div class="tabs">
-            <button class="tab active" data-tab="sessions" onclick="switchTab('sessions')">Sessions</button>
-            <button class="tab" data-tab="new-session" onclick="switchTab('new-session')">New Session</button>
-            <button class="tab" data-tab="channel" onclick="switchTab('channel')">Channel</button>
+            <button class="tab active" data-tab="sessions" onclick="switchTab('sessions')">
+                <i class="fas fa-layer-group"></i> Sessions
+            </button>
+            <button class="tab" data-tab="new-session" onclick="switchTab('new-session')">
+                <i class="fas fa-plus"></i> New Session
+            </button>
+            <button class="tab" data-tab="channel" onclick="switchTab('channel')">
+                <i class="fas fa-broadcast-tower"></i> Channel
+            </button>
         </div>
 
         <!-- Tab: Sessions -->
         <div class="tab-content active" id="tab-sessions">
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <span class="stat-icon">📱</span>
-                    <span class="stat-value" id="sessionCount">0</span>
-                    <span class="stat-label">Sessions</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-icon">👥</span>
-                    <span class="stat-value" id="userCount">0</span>
-                    <span class="stat-label">Users</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-icon">💬</span>
-                    <span class="stat-value" id="msgCount">0</span>
-                    <span class="stat-label">Messages</span>
-                </div>
-            </div>
-
             <div id="sessionsList" class="sessions-list">
-                <div class="loading-state">
+                <div class="empty-state">
                     <div class="loader"></div>
                     <span>Loading sessions...</span>
                 </div>
@@ -83,7 +90,6 @@
 
         <!-- Tab: New Session -->
         <div class="tab-content" id="tab-new-session">
-            <!-- Steps -->
             <div class="steps">
                 <div class="step active" id="step1">
                     <div class="step-number">1</div>
@@ -102,16 +108,20 @@
             </div>
 
             <!-- Create Session -->
-            <div class="card" id="createCard">
+            <div class="glass-card" id="createCard">
+                <div class="card-icon"><i class="fas fa-link"></i></div>
                 <h2>Create New Session</h2>
-                <p class="card-desc">Enter a session name and your phone number</p>
+                <p class="card-desc">Enter a session name and your phone number with country code</p>
 
                 <div class="input-group">
-                    <input type="text" id="sessionName" placeholder="Session name (e.g. friend1)" maxlength="30">
+                    <label>Session Name</label>
+                    <input type="text" id="sessionName" placeholder="e.g. mybot, work, friend1" maxlength="30">
                 </div>
 
-                <div class="input-group" style="margin-top:12px">
-                    <input type="tel" id="phoneNumber" placeholder="Phone number (e.g. 6281234567890)" maxlength="15">
+                <div class="input-group">
+                    <label>Phone Number</label>
+                    <input type="tel" id="phoneNumber" placeholder="e.g. 233505746530" maxlength="15">
+                    <span class="input-hint"><i class="fas fa-info-circle"></i> Include country code without + or spaces (e.g. 233 for Ghana, 62 for Indonesia, 1 for US)</span>
                 </div>
 
                 <button class="btn-primary" onclick="createSession()">
@@ -121,35 +131,39 @@
             </div>
 
             <!-- Linking Code -->
-            <div class="card hidden" id="pairingCard">
+            <div class="glass-card hidden" id="pairingCard">
+                <div class="card-icon pulse"><i class="fas fa-qrcode"></i></div>
                 <h2>Your Pairing Code</h2>
-                <p class="card-desc">Enter this code on your phone to link</p>
+                <p class="card-desc">Enter this code on your phone: WhatsApp > Settings > Linked Devices</p>
 
-                <div class="pairing-code-container" id="pairingCodeContainer">
+                <div class="pairing-code-container">
                     <div class="pairing-code" id="pairingCode">----</div>
                 </div>
 
-                <button class="btn-copy" id="copyBtn" onclick="copyPairingCode()">COPY CODE</button>
+                <button class="btn-copy" id="copyBtn" onclick="copyPairingCode()">
+                    <i class="fas fa-copy"></i> COPY CODE
+                </button>
 
-                <a href="https://wa.me/pairing" target="_blank" class="whatsapp-link" id="whatsappLink">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                    </svg>
+                <a href="https://wa.me/pairing" target="_blank" class="whatsapp-link">
+                    <i class="fab fa-whatsapp"></i>
                     Open WhatsApp to link
                 </a>
 
-                <div class="status" id="pairingStatus">
-                    <span class="status-dot"></span>
+                <div class="status-badge" id="pairingStatus">
+                    <span class="status-pulse"></span>
                     <span id="pairingStatusText">Waiting for linking...</span>
                 </div>
 
-                <button class="btn-secondary" onclick="cancelSession()">Cancel</button>
+                <button class="btn-ghost" onclick="cancelSession()">
+                    <i class="fas fa-arrow-left"></i> Back
+                </button>
             </div>
 
             <!-- QR Code (fallback) -->
-            <div class="card hidden" id="qrCard">
+            <div class="glass-card hidden" id="qrCard">
+                <div class="card-icon pulse"><i class="fas fa-qrcode"></i></div>
                 <h2>Scan QR Code</h2>
-                <p class="card-desc">Open WhatsApp → Settings → Linked Devices → Link a Device</p>
+                <p class="card-desc">Open WhatsApp > Settings > Linked Devices > Link a Device</p>
 
                 <div class="qr-container" id="qrContainer">
                     <div class="qr-loading">
@@ -158,71 +172,72 @@
                     </div>
                 </div>
 
-                <div class="status" id="qrStatus">
-                    <span class="status-dot"></span>
+                <div class="status-badge">
+                    <span class="status-pulse"></span>
                     <span>Waiting for scan...</span>
                 </div>
 
-                <button class="btn-secondary" onclick="cancelSession()">Cancel</button>
+                <button class="btn-ghost" onclick="cancelSession()">
+                    <i class="fas fa-arrow-left"></i> Back
+                </button>
             </div>
 
             <!-- Success -->
-            <div class="card hidden" id="successCard">
-                <div class="success-icon">⚡</div>
+            <div class="glass-card hidden" id="successCard">
+                <div class="success-icon"><i class="fas fa-check-circle"></i></div>
                 <h2>Device Connected!</h2>
-                <p class="card-desc">Session is now active</p>
+                <p class="card-desc">Session is now active and ready to use</p>
 
                 <div class="features">
                     <div class="feature">
-                        <span class="feature-icon">💬</span>
+                        <i class="fas fa-terminal"></i>
                         <span>Send commands in any chat</span>
                     </div>
                     <div class="feature">
-                        <span class="feature-icon">📥</span>
+                        <i class="fas fa-download"></i>
                         <span>Download TikTok, Instagram, YouTube</span>
                     </div>
                     <div class="feature">
-                        <span class="feature-icon">🤖</span>
+                        <i class="fas fa-robot"></i>
                         <span>Chat with AI</span>
                     </div>
                     <div class="feature">
-                        <span class="feature-icon">🎨</span>
+                        <i class="fas fa-palette"></i>
                         <span>Create stickers</span>
                     </div>
                 </div>
 
-                <button class="btn-primary" onclick="resetSession()">Create Another</button>
+                <button class="btn-primary" onclick="resetSession()">
+                    <i class="fas fa-plus"></i> Create Another
+                </button>
             </div>
         </div>
 
         <!-- Tab: Channel -->
         <div class="tab-content" id="tab-channel">
-            <div class="channel-card">
+            <div class="glass-card channel-card">
                 <div class="channel-header">
                     <div class="channel-logo">
                         <img src="channel-logo.jpg" alt="Max Shadows">
                     </div>
                     <div class="channel-info">
                         <h3>Max Shadows</h3>
-                        <span class="channel-badge">WhatsApp Channel</span>
+                        <span class="channel-badge"><i class="fas fa-check-circle"></i> WhatsApp Channel</span>
                     </div>
                 </div>
                 <p class="channel-desc">Join for bot updates, tips & exclusive content</p>
-                <a href="https://whatsapp.com/channel/0029Vb6rpEcBVJl1VDOy323z" target="_blank" class="channel-btn">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                    </svg>
+                <a href="https://whatsapp.com/channel/0029Vb6rpEcBVJl1VDOy323z" target="_blank" class="btn-channel">
+                    <i class="fab fa-whatsapp"></i>
                     Follow Channel
                 </a>
             </div>
         </div>
 
-        <!-- Footer -->
-        <div class="footer">
-            <p>Bot by <strong>Max Shadows</strong></p>
-            <p>Use <code>!menu</code> in WhatsApp to see all commands</p>
-        </div>
-    </div>
+        <footer class="footer">
+            <p>Built by <strong>Max Shadows</strong></p>
+            <p>Type <code>!menu</code> in WhatsApp to see all commands</p>
+        </footer>
+    </main>
 
     <script src="script.js"></script>
 </body>
