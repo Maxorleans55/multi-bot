@@ -1,5 +1,6 @@
 import type { CommandModule, CommandConfig } from '../../types/index.js';
 import { getPrefixes, isOwner } from '../../config/botConfig.js';
+import { log } from '../../utils/logger.js';
 
 const categoryIcons: Record<string, string> = {
   basic: '📂',
@@ -157,9 +158,15 @@ ${commands.map(cmd => {
 ┃
 ╰━━━━━━━━━━━━━━━━━━━╯`;
 
-      await context.socket.sendMessage(context.fromJid, {
-        text: helpText,
-      });
+      try {
+        log.info(`[help] Sending menu to ${context.fromJid} (${helpText.length} chars)`);
+        await context.socket.sendMessage(context.fromJid, {
+          text: helpText,
+        });
+        log.info(`[help] Menu sent successfully to ${context.fromJid}`);
+      } catch (err) {
+        log.error(`[help] FAILED to send menu to ${context.fromJid}:`, err as object);
+      }
     }
   },
 };
