@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import QRCode from 'qrcode';
 import sessionManager from './session/sessionManager.js';
 import { createSession, disconnectSession, getAllSessions } from './session/sessionHelper.js';
+import prisma from './database/prisma.js';
 import { log } from './utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -56,36 +57,25 @@ app.post('/api/pairing/:sessionId', async (req, res) => {
     }
     const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
 
-    // Wait for socket to be ready
+    // Check if session exists
     let socket = await sessionManager.getSession(sessionId);
-    let retries = 0;
-    while (!socket && retries < 20) {
-      await new Promise(r => setTimeout(r, 1000));
-      socket = await sessionManager.getSession(sessionId);
-      retries++;
-    }
-
     if (!socket) {
-      return res.status(500).json({ error: 'Session not found after 20s. Create session first.' });
+      return res.status(500).json({ error: 'Session not found. Create session first.' });
     }
 
-    // Wait for QR to appear — this means socket is connected to WA servers
-    let qrReady = false;
-    for (let i = 0; i < 30; i++) {
-      const qr = sessionManager.getQR(sessionId);
-      if (qr) { qrReady = true; break; }
-      if (sessionManager.isConnected(sessionId)) { qrReady = true; break; }
-      await new Promise(r => setTimeout(r, 1000));
+    // Check if already connected
+    if (sessionManager.isConnected(sessionId)) {
+      return res.status(400).json({ error: 'Session already connected' });
     }
 
-    log.info(`[Pairing] QR ready for ${sessionId}: ${qrReady}`);
+    log.info(`[Pairing] Requesting pairing code for ${sessionId} (phone: ${cleanPhone})`);
 
     const code = await sessionManager.requestPairingCode(sessionId, cleanPhone);
     if (code) {
       log.info(`[Pairing] SUCCESS: code ${code} for ${sessionId} (phone: ${cleanPhone})`);
       res.json({ success: true, code });
     } else {
-      res.status(500).json({ error: 'Failed to generate pairing code. Check Codespace terminal for errors.' });
+      res.status(500).json({ error: 'Failed to generate pairing code. Check terminal for errors.' });
     }
   } catch (error) {
     log.error(`[Pairing] Error:`, error as object);

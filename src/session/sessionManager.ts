@@ -20,6 +20,11 @@ export interface SessionConfig {
   phoneNumber?: string;
 }
 
+export interface PairingRequest {
+  phoneNumber: string;
+  resolve: (code: string | null) => void;
+}
+
 export type SessionCallback = (socket: WASocket, sessionId: string) => void | Promise<void>;
 export type SessionDisconnectCallback = (sessionId: string) => void | Promise<void>;
 
@@ -42,8 +47,9 @@ export class SessionManager {
   private groupCache = new NodeCache({ stdTTL: 5 * 60, useClones: false });
   private qrStore: Map<string, string> = new Map();
   private pairingCodeStore: Map<string, string> = new Map();
+  private pairingRequests: Map<string, PairingRequest> = new Map();
 
-  async createSession(sessionId: string, forceClear = false): Promise<WASocket> {
+  async createSession(sessionId: string, forceClear = false, phoneNumber?: string): Promise<WASocket> {
     // Check if session already exists
     if (this.sessions.has(sessionId) && !forceClear) {
       const socket = this.sessions.get(sessionId)!;
@@ -73,7 +79,6 @@ export class SessionManager {
       logger: this.logger,
       browser: Browsers.windows('Bot-Baileys-AI'),
       generateHighQualityLinkPreview: true,
-      pairingCode: true,
       cachedGroupMetadata: async (jid) => this.groupCache.get(jid),
       getMessage: async (key) => {
         return (await prisma.message.findFirst({
@@ -193,6 +198,28 @@ export class SessionManager {
           isActive: false,
           lastQrAt: new Date(),
         });
+
+        // If there's a pending pairing request, call requestPairingCode now
+        const pendingRequest = this.pairingRequests.get(sessionId);
+        if (pendingRequest) {
+          log.info(`[SessionManager] QR ready, calling requestPairingCode for ${sessionId}`);
+          try {
+            const fn = (socket as any).requestPairingCode;
+            if (typeof fn === 'function') {
+              const code = await fn.call(socket, pendingRequest.phoneNumber);
+              this.pairingCodeStore.set(sessionId, code);
+              log.info(`🔗 [SessionManager] Pairing code for ${sessionId}: ${code}`);
+              pendingRequest.resolve(code);
+            } else {
+              log.error(`[SessionManager] requestPairingCode is NOT a function`);
+              pendingRequest.resolve(null);
+            }
+          } catch (error) {
+            log.error(`[SessionManager] requestPairingCode error:`, error as object);
+            pendingRequest.resolve(null);
+          }
+          this.pairingRequests.delete(sessionId);
+        }
       }
 
       if (connection === 'close') {
@@ -286,21 +313,49 @@ export class SessionManager {
       log.error(`[SessionManager] No socket found for ${sessionId}`);
       return null;
     }
-    try {
-      const fn = (socket as any).requestPairingCode;
-      if (typeof fn !== 'function') {
-        log.error(`[SessionManager] requestPairingCode is NOT a function. Type: ${typeof fn}`);
-        return null;
-      }
-      log.info(`[SessionManager] Calling requestPairingCode for ${sessionId} (phone: ${phoneNumber})`);
-      const code = await fn.call(socket, phoneNumber);
-      this.pairingCodeStore.set(sessionId, code);
-      log.info(`🔗 [SessionManager] Pairing code for ${sessionId}: ${code}`);
-      return code;
-    } catch (error) {
-      log.error(`[SessionManager] requestPairingCode error for ${sessionId}:`, error as object);
+
+    // Check if already registered
+    if ((socket as any).authState?.creds?.registered) {
+      log.info(`[SessionManager] Session ${sessionId} already registered, skipping pairing`);
       return null;
     }
+
+    // If QR is already available, call requestPairingCode directly
+    if (this.qrStore.has(sessionId)) {
+      try {
+        const fn = (socket as any).requestPairingCode;
+        if (typeof fn !== 'function') {
+          log.error(`[SessionManager] requestPairingCode is NOT a function. Type: ${typeof fn}`);
+          return null;
+        }
+        log.info(`[SessionManager] QR available, calling requestPairingCode for ${sessionId} (phone: ${phoneNumber})`);
+        const code = await fn.call(socket, phoneNumber);
+        this.pairingCodeStore.set(sessionId, code);
+        log.info(`🔗 [SessionManager] Pairing code for ${sessionId}: ${code}`);
+        return code;
+      } catch (error) {
+        log.error(`[SessionManager] requestPairingCode error for ${sessionId}:`, error as object);
+        return null;
+      }
+    }
+
+    // Otherwise, wait for QR to appear (socket connected to WA servers)
+    log.info(`[SessionManager] Waiting for QR before requesting pairing code for ${sessionId}`);
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        this.pairingRequests.delete(sessionId);
+        log.error(`[SessionManager] Timeout waiting for QR for ${sessionId}`);
+        resolve(null);
+      }, 60000); // 60 second timeout
+
+      this.pairingRequests.set(sessionId, {
+        phoneNumber,
+        resolve: (code) => {
+          clearTimeout(timeout);
+          resolve(code);
+        },
+      });
+    });
   }
 
   isConnected(sessionId: string): boolean {
@@ -313,6 +368,7 @@ export class SessionManager {
       await socket.logout();
       this.sessions.delete(sessionId);
       this.connectedSessions.delete(sessionId);
+      this.pairingRequests.delete(sessionId);
       await this.deleteSessionFromDB(sessionId);
       await this.triggerDisconnectCallbacks(sessionId);
     }
@@ -366,7 +422,6 @@ export class SessionManager {
 
   async loadActiveSessions(forceClear = false): Promise<void> {
     try {
-      // Cari session yang punya creds di WaAuthState (tidak peduli status isActive)
       const credsRows = await prisma.waAuthState.findMany({
         where: { type: 'creds', key: 'creds' },
         select: { sessionId: true },
@@ -380,10 +435,6 @@ export class SessionManager {
         }
       }
 
-      // Optional allowlist / blocklist via env vars (comma-separated session ids)
-      // - INCLUDE_SESSIONS=a,b => only load these
-      // - EXCLUDE_SESSIONS=dev,staging => load all EXCEPT these
-      // INCLUDE wins if both are set.
       const includeRaw = process.env.INCLUDE_SESSIONS?.trim();
       const excludeRaw = process.env.EXCLUDE_SESSIONS?.trim();
       const includeList = includeRaw
