@@ -75,7 +75,6 @@ export class SessionManager {
 
     const socket = makeWASocket({
       auth: state,
-      version: [2, 3000, 1039568566],
       logger: this.logger,
       browser: Browsers.windows('Bot-Baileys-AI'),
       generateHighQualityLinkPreview: true,
