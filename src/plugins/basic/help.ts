@@ -43,7 +43,9 @@ const helpCommand: CommandModule = {
 
     const allCommands = pm.getAllCommands();
 
-    if (args.length > 0) {
+    const selfAliases = ['help', 'h', 'menu'];
+
+    if (args.length > 0 && !selfAliases.includes(args[0].toLowerCase())) {
       const commandName = args[0].toLowerCase();
       const command = pm.getCommand(commandName);
 
