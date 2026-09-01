@@ -3,7 +3,7 @@ let pollInterval = null;
 let musicPlaying = false;
 let sessions = new Map();
 
-// Music - start muted, unmute on first user interaction
+// Music - start muted, unmute on first click
 const bgm = document.getElementById('bgm');
 if (bgm) {
     bgm.volume = 0.3;
@@ -12,18 +12,17 @@ if (bgm) {
     document.addEventListener('click', unmute);
 }
 
-// Toggle music
 function toggleMusic() {
-    const btn = document.querySelector('.music-btn');
+    const btn = document.getElementById('musicBtn');
     if (musicPlaying) {
         bgm.pause();
-        btn.classList.remove('playing');
+        btn.classList.remove('on');
         btn.innerHTML = '<i class="fas fa-volume-xmark"></i>';
     } else {
         bgm.muted = false;
         bgm.volume = 0.3;
         bgm.play().catch(() => {});
-        btn.classList.add('playing');
+        btn.classList.add('on');
         btn.innerHTML = '<i class="fas fa-volume-high"></i>';
     }
     musicPlaying = !musicPlaying;
@@ -33,7 +32,7 @@ function toggleMusic() {
 function switchTab(name) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelector(`[data-tab="${name}"]`).classList.add('active');
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     document.getElementById(`tab-${name}`).classList.add('active');
     if (name === 'sessions') loadSessions();
 }
@@ -57,52 +56,41 @@ async function loadStatus() {
     }
 }
 
-// Sessions - load all sessions
+// Sessions
 async function loadSessions() {
-    const container = document.getElementById('sessionsList');
+    const el = document.getElementById('sessionsList');
     try {
         const res = await fetch('/api/sessions');
         const data = await res.json();
         sessions = new Map();
-        
+
         if (!data.sessions || data.sessions.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-mobile-screen"></i>
-                    <p>No sessions yet</p>
-                    <p>Create a new session to get started</p>
-                </div>`;
+            el.innerHTML = `<div class="empty"><i class="fas fa-mobile-screen" style="font-size:32px;opacity:0.2"></i><p>No sessions yet</p><p style="font-size:11px;color:#444">Create a new session to get started</p></div>`;
             return;
         }
-        
-        container.innerHTML = data.sessions.map(s => {
+
+        el.innerHTML = data.sessions.map(s => {
             sessions.set(s.sessionId, { connected: s.isAlive, phoneNumber: s.phoneNumber });
-            const isAlive = s.isAlive;
-            const initial = s.sessionId.charAt(0).toUpperCase();
+            const alive = s.isAlive;
             return `
-                <div class="session-card ${isAlive ? 'connected' : 'disconnected'}">
-                    <div class="session-info">
-                        <div class="session-avatar">${initial}</div>
+                <div class="session-card ${alive ? 'connected' : 'disconnected'}">
+                    <div class="session-left">
+                        <div class="session-avatar">${s.sessionId.charAt(0).toUpperCase()}</div>
                         <div>
                             <div class="session-name">${s.sessionId}</div>
-                            <div class="session-status ${isAlive ? 'connected' : 'disconnected'}">
-                                ${isAlive ? '● Connected' : '○ ' + (s.status || 'Disconnected')}
+                            <div class="session-status ${alive ? 'connected' : 'disconnected'}">
+                                ${alive ? '● Connected' : '○ ' + (s.status || 'Disconnected')}
                             </div>
                         </div>
                     </div>
                     <div class="session-actions">
-                        ${!isAlive ? `<button class="btn-icon" onclick="reconnectSession('${s.sessionId}')" title="Reconnect"><i class="fas fa-rotate-right"></i></button>` : ''}
-                        <button class="btn-icon danger" onclick="deleteSession('${s.sessionId}')" title="Disconnect"><i class="fas fa-xmark"></i></button>
+                        ${!alive ? `<button class="icon-btn" onclick="reconnectSession('${s.sessionId}')" title="Reconnect"><i class="fas fa-rotate-right"></i></button>` : ''}
+                        <button class="icon-btn danger" onclick="deleteSession('${s.sessionId}')" title="Delete"><i class="fas fa-xmark"></i></button>
                     </div>
                 </div>`;
         }).join('');
     } catch {
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-exclamation-triangle"></i>
-                <p>Failed to load sessions</p>
-                <p>Please try again</p>
-            </div>`;
+        el.innerHTML = `<div class="empty"><i class="fas fa-exclamation-triangle" style="font-size:32px;opacity:0.2"></i><p>Failed to load sessions</p></div>`;
     }
 }
 
@@ -110,14 +98,14 @@ async function loadSessions() {
 async function createSession() {
     const name = document.getElementById('sessionName').value.trim();
     const phone = document.getElementById('phoneNumber').value.trim();
-    if (!name) return alert('Please enter a session name');
-    if (!phone) return alert('Please enter your phone number');
-    
-    const btnText = document.getElementById('btnText');
-    const btnLoader = document.getElementById('btnLoader');
-    btnText.textContent = 'Creating...';
-    btnLoader.classList.remove('hidden');
-    
+    if (!name) return alert('Enter a session name');
+    if (!phone) return alert('Enter your phone number');
+
+    const txt = document.getElementById('btnText');
+    const ld = document.getElementById('btnLoader');
+    txt.textContent = 'Creating...';
+    ld.classList.remove('hidden');
+
     try {
         const res = await fetch('/api/sessions', {
             method: 'POST',
@@ -128,7 +116,7 @@ async function createSession() {
         if (data.success) {
             currentSession = name;
             document.getElementById('createCard').classList.add('hidden');
-            document.getElementById('step1').classList.add('completed');
+            document.getElementById('step1').classList.add('done');
             document.getElementById('step2').classList.add('active');
             await requestPairingCode(name, phone);
         } else {
@@ -137,12 +125,12 @@ async function createSession() {
     } catch {
         alert('Network error');
     }
-    
-    btnText.textContent = 'Create & Link';
-    btnLoader.classList.add('hidden');
+
+    txt.textContent = 'Create & Link';
+    ld.classList.add('hidden');
 }
 
-// Request pairing code
+// Pairing code
 async function requestPairingCode(sessionId, phoneNumber) {
     try {
         const res = await fetch(`/api/pairing/${sessionId}`, {
@@ -152,38 +140,35 @@ async function requestPairingCode(sessionId, phoneNumber) {
         });
         const data = await res.json();
         if (data.success && data.code) {
-            const rawCode = data.code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-            const formattedCode = rawCode.length >= 8
-                ? rawCode.slice(0, 4) + '-' + rawCode.slice(4, 8)
-                : rawCode;
+            const raw = data.code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+            const code = raw.length >= 8 ? raw.slice(0, 4) + '-' + raw.slice(4, 8) : raw;
             document.getElementById('pairingCard').classList.remove('hidden');
-            document.getElementById('step2Label').textContent = 'Enter Code';
-            document.getElementById('pairingCode').textContent = formattedCode;
+            document.getElementById('step2Label').textContent = 'Code';
+            document.getElementById('pairingCode').textContent = code;
             document.getElementById('pairingStatusText').textContent = 'Enter this code on your phone within 2 minutes';
-            currentPairingCode = formattedCode;
+            currentPairingCode = code;
             waitForPairing(sessionId);
         } else {
-            console.log('Pairing code failed, falling back to QR');
             document.getElementById('qrCard').classList.remove('hidden');
-            document.getElementById('step2Label').textContent = 'Scan QR';
+            document.getElementById('step2Label').textContent = 'QR';
             waitForQR(sessionId);
         }
     } catch {
         document.getElementById('qrCard').classList.remove('hidden');
-        document.getElementById('step2Label').textContent = 'Scan QR';
+        document.getElementById('step2Label').textContent = 'QR';
         waitForQR(sessionId);
     }
 }
 
-// Copy pairing code
+// Copy code
 let currentPairingCode = '';
 function copyPairingCode() {
     if (!currentPairingCode) return;
     navigator.clipboard.writeText(currentPairingCode).then(() => {
         const btn = document.getElementById('copyBtn');
         btn.innerHTML = '<i class="fas fa-check"></i> COPIED';
-        btn.style.borderColor = '#25D366';
-        btn.style.color = '#25D366';
+        btn.style.borderColor = '#2ec4b6';
+        btn.style.color = '#2ec4b6';
         setTimeout(() => {
             btn.innerHTML = '<i class="fas fa-copy"></i> COPY CODE';
             btn.style.borderColor = '';
@@ -192,10 +177,9 @@ function copyPairingCode() {
     }).catch(() => {});
 }
 
-// Wait for pairing code to be linked
+// Wait for pairing
 async function waitForPairing(sessionId) {
     let attempts = 0;
-    const maxAttempts = 60;
     const check = async () => {
         try {
             const res = await fetch(`/api/qr/${sessionId}`);
@@ -208,7 +192,7 @@ async function waitForPairing(sessionId) {
             }
         } catch {}
         attempts++;
-        if (attempts >= maxAttempts) {
+        if (attempts >= 60) {
             document.getElementById('pairingStatusText').textContent = 'Timed out. Try again.';
             document.getElementById('pairingStatusText').style.color = '#ef4444';
             return;
@@ -218,7 +202,7 @@ async function waitForPairing(sessionId) {
     check();
 }
 
-// Wait for QR scan
+// Wait for QR
 async function waitForQR(sessionId) {
     let attempts = 0;
     let showedQR = false;
@@ -226,19 +210,13 @@ async function waitForQR(sessionId) {
         try {
             const res = await fetch(`/api/qr/${sessionId}`);
             const data = await res.json();
-            if (data.connected && showedQR) {
-                showSuccess();
-                return;
-            }
+            if (data.connected && showedQR) { showSuccess(); return; }
             if (data.qr && !showedQR) {
                 showedQR = true;
-                document.getElementById('qrContainer').innerHTML = `<img src="${data.qr}" alt="QR Code">`;
-                document.getElementById('qrStatusText').textContent = 'Scan with your phone camera';
+                document.getElementById('qrContainer').innerHTML = `<img src="${data.qr}" alt="QR">`;
+                document.getElementById('qrStatusText').textContent = 'Scan with your phone';
             }
-            if (attempts > 20 && !showedQR) {
-                showSuccess();
-                return;
-            }
+            if (attempts > 20 && !showedQR) { showSuccess(); return; }
         } catch {}
         attempts++;
         setTimeout(check, 2000);
@@ -246,29 +224,29 @@ async function waitForQR(sessionId) {
     check();
 }
 
-// Cancel session creation
+// Cancel
 function cancelSession() {
     if (pollInterval) clearInterval(pollInterval);
     currentSession = null;
     document.getElementById('pairingCard').classList.add('hidden');
     document.getElementById('qrCard').classList.add('hidden');
     document.getElementById('createCard').classList.remove('hidden');
-    document.getElementById('step1').classList.remove('completed');
+    document.getElementById('step1').classList.remove('done');
     document.getElementById('step2').classList.remove('active');
-    document.getElementById('step2Label').textContent = 'Link Device';
+    document.getElementById('step2Label').textContent = 'Link';
 }
 
-// Success state
+// Success
 function showSuccess() {
     if (pollInterval) clearInterval(pollInterval);
     document.getElementById('qrCard').classList.add('hidden');
     document.getElementById('pairingCard').classList.add('hidden');
     document.getElementById('successCard').classList.remove('hidden');
-    document.getElementById('step2').classList.add('completed');
+    document.getElementById('step2').classList.add('done');
     document.getElementById('step3').classList.add('active');
 }
 
-// Reset session UI
+// Reset
 function resetSession() {
     currentSession = null;
     currentPairingCode = '';
@@ -278,29 +256,29 @@ function resetSession() {
     document.getElementById('createCard').classList.remove('hidden');
     document.getElementById('sessionName').value = '';
     document.getElementById('phoneNumber').value = '';
-    document.getElementById('step1').classList.remove('completed');
-    document.getElementById('step2').classList.remove('active');
-    document.getElementById('step2Label').textContent = 'Link Device';
+    document.getElementById('step1').classList.remove('done');
+    document.getElementById('step2').classList.remove('active', 'done');
+    document.getElementById('step2Label').textContent = 'Link';
     document.getElementById('step3').classList.remove('active');
     switchTab('sessions');
 }
 
-// Reconnect session
+// Reconnect
 async function reconnectSession(id) {
     currentSession = id;
     document.getElementById('createCard').classList.add('hidden');
     document.getElementById('pairingCard').classList.add('hidden');
     document.getElementById('qrCard').classList.remove('hidden');
-    document.getElementById('step1').classList.add('completed');
+    document.getElementById('step1').classList.add('done');
     document.getElementById('step2').classList.add('active');
-    document.getElementById('step2Label').textContent = 'Scan QR';
+    document.getElementById('step2Label').textContent = 'QR';
     if (pollInterval) clearInterval(pollInterval);
     waitForQR(id);
 }
 
-// Delete session
+// Delete
 async function deleteSession(id) {
-    if (!confirm(`Disconnect session "${id}"?`)) return;
+    if (!confirm(`Delete session "${id}"?`)) return;
     try {
         await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
         sessions.delete(id);
@@ -308,7 +286,7 @@ async function deleteSession(id) {
     } catch {}
 }
 
-// Enter key on inputs
+// Enter key
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sessionName')?.addEventListener('keypress', e => {
         if (e.key === 'Enter') document.getElementById('phoneNumber')?.focus();
