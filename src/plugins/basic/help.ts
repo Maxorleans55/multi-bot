@@ -2,6 +2,7 @@ import type { CommandModule, CommandConfig } from '../../types/index.js';
 import { getPrefixes, isOwner } from '../../config/botConfig.js';
 import { join } from 'path';
 import { readFileSync } from 'fs';
+import sharp from 'sharp';
 
 const categoryIcons: Record<string, string> = {
   basic: '📂',
@@ -121,14 +122,15 @@ ${commands.map(cmd => {
 
       try {
         const imagePath = join(process.cwd(), 'public', 'light-yagami.png');
-        console.log(`[help] Loading image from: ${imagePath}`);
         const imageBuffer = readFileSync(imagePath);
-        console.log(`[help] Image loaded, size: ${imageBuffer.length} bytes`);
+        const resizedBuffer = await sharp(imageBuffer)
+          .resize(800, 800, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+          .png()
+          .toBuffer();
         await context.socket.sendMessage(context.fromJid, {
-          image: imageBuffer,
+          image: resizedBuffer,
           caption: menuText,
         });
-        console.log(`[help] Image + menu sent successfully`);
       } catch (err) {
         console.error(`[help] Failed to load/send image, falling back to text:`, err);
         await context.socket.sendMessage(context.fromJid, {
