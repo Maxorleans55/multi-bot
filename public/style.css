@@ -126,10 +126,14 @@ body{min-height:100vh;background:#0a0a0a;color:#e0e0e0;font-family:'Inter',sans-
 
 .hidden{display:none!important}
 
-.pairing-code-container{text-align:center;margin:24px 0}
-.pairing-code{font-family:'Oswald',sans-serif;font-size:48px;font-weight:700;letter-spacing:12px;color:#ff0000;background:rgba(255,0,0,.08);border:2px solid rgba(255,0,0,.3);border-radius:12px;padding:20px 32px;display:inline-block;text-shadow:0 0 20px rgba(255,0,0,.5);animation:glow 2s ease-in-out infinite}
-#pairingStatus .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff0000;animation:pulse 1.5s infinite}
+.pairing-code-container{text-align:center;margin:20px 0}
+.pairing-code{font-family:'Oswald',sans-serif;font-size:52px;font-weight:700;letter-spacing:8px;color:#ff0000;background:rgba(255,0,0,.08);border:2px solid rgba(255,0,0,.3);border-radius:12px;padding:24px 40px;display:inline-block;text-shadow:0 0 20px rgba(255,0,0,.5);animation:glow 2s ease-in-out infinite;word-spacing:16px}
+.btn-copy{width:100%;padding:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,0,0,.3);border-radius:10px;color:#e0e0e0;font-size:14px;font-weight:600;cursor:pointer;transition:all .3s;letter-spacing:2px;margin-bottom:12px;font-family:'Inter',sans-serif}
+.btn-copy:hover{background:rgba(255,0,0,.15);border-color:rgba(255,0,0,.5)}
+.whatsapp-link{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;color:#25D366;font-size:14px;text-decoration:none;transition:all .3s;margin-bottom:16px}
+.whatsapp-link:hover{color:#128C7E}
 #pairingStatus{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px;font-size:13px;color:#888}
+#pairingStatus .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff0000;animation:pulse 1.5s infinite}
 .input-group{margin-bottom:16px}
 .input-group input{width:100%;padding:14px 18px;background:rgba(255,255,255,.05);border:1px solid rgba(255,0,0,.2);border-radius:10px;color:#e0e0e0;font-size:14px;font-family:'Inter',sans-serif;transition:border-color .3s}
 .input-group input:focus{outline:none;border-color:rgba(255,0,0,.6)}

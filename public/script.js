@@ -167,11 +167,17 @@ async function requestPairingCode(sessionId, phoneNumber) {
         });
         const data = await res.json();
         if (data.success && data.code) {
+            // Format code as XXXX-XXXX
+            const rawCode = data.code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+            const formattedCode = rawCode.length >= 8
+                ? rawCode.slice(0, 4) + '-' + rawCode.slice(4, 8)
+                : rawCode;
             // Show pairing code card
             document.getElementById('pairingCard').classList.remove('hidden');
             document.getElementById('step2Label').textContent = 'Enter Code';
-            document.getElementById('pairingCode').textContent = data.code;
+            document.getElementById('pairingCode').textContent = formattedCode;
             document.getElementById('pairingStatusText').textContent = 'Enter this code on your phone...';
+            currentPairingCode = formattedCode;
             waitForPairing(sessionId);
         } else {
             // Fallback to QR code
@@ -186,6 +192,36 @@ async function requestPairingCode(sessionId, phoneNumber) {
         document.getElementById('step2Label').textContent = 'Scan QR';
         waitForQR(sessionId);
     }
+}
+
+// Copy pairing code to clipboard
+let currentPairingCode = '';
+function copyPairingCode() {
+    if (!currentPairingCode) return;
+    navigator.clipboard.writeText(currentPairingCode).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = 'COPIED!';
+        btn.style.color = '#25D366';
+        setTimeout(() => {
+            btn.textContent = 'COPY CODE';
+            btn.style.color = '';
+        }, 2000);
+    }).catch(() => {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = currentPairingCode;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = 'COPIED!';
+        btn.style.color = '#25D366';
+        setTimeout(() => {
+            btn.textContent = 'COPY CODE';
+            btn.style.color = '';
+        }, 2000);
+    });
 }
 
 // Wait for pairing code to be linked
@@ -280,6 +316,7 @@ function showSuccess() {
 // Reset session UI
 function resetSession() {
     currentSession = null;
+    currentPairingCode = '';
     sessions.delete(currentSession);
     document.getElementById('successCard').classList.add('hidden');
     document.getElementById('pairingCard').classList.add('hidden');
