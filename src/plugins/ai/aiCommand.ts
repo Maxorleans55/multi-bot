@@ -1,4 +1,4 @@
-import type { WASocket } from "@stazyu/baileys";
+import type { WASocket } from "@whiskeysockets/baileys";
 import type { CommandModule } from "../../types/index.js";
 import type { ToolContext } from "../../types/tools.js";
 import aiService, { AIService } from "../../services/aiService.js";

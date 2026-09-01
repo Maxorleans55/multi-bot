@@ -1,6 +1,6 @@
 import type { CommandModule } from '../../types/index.js';
-import type { WASocket } from '@stazyu/baileys';
-import { proto } from '@stazyu/baileys';
+import type { WASocket } from '@whiskeysockets/baileys';
+import { proto } from '@whiskeysockets/baileys';
 import util from 'util';
 
 const evalCommand: CommandModule = {

@@ -6,7 +6,7 @@ import {
   BufferJSON,
   AuthenticationCreds,
   AuthenticationState,
-} from '@stazyu/baileys';
+} from '@whiskeysockets/baileys';
 
 /**
  * Database-based auth state storage for Baileys

@@ -1,5 +1,5 @@
 import type { CommandModule } from '../../types/index.js';
-import { downloadMediaMessage } from '@stazyu/baileys';
+import { downloadMediaMessage } from '@whiskeysockets/baileys';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

@@ -1,14 +1,14 @@
 import type { CommandModule } from '../../types/index.js';
 import type { SimplifiedMessage } from '../../bot/botHandler.js';
-import type { WAMessage, WASocket, Sticker as PackSticker } from '@stazyu/baileys';
-import { downloadContentFromMessage } from '@stazyu/baileys';
+import type { WAMessage, WASocket, Sticker as PackSticker } from '@whiskeysockets/baileys';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import { Sticker, StickerTypes } from 'wa-sticker-formatter';
 import { deflateSync } from 'zlib';
 import { log } from '../../utils/logger.js';
 
 // ---------------------------------------------------------------------------
 // Sticker Pack plugin — built for the sticker pack support added in
-// WhiskeySockets/Baileys PR #1561 (present in the @stazyu/baileys fork).
+// WhiskeySockets/Baileys PR #1561 (present in the @whiskeysockets/baileys fork).
 //
 // Usage:
 //   !stickerpack                     → start a new collection (default name)

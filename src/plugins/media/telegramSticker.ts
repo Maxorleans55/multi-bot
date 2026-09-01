@@ -1,5 +1,5 @@
 import type { CommandModule } from '../../types/index.js';
-import type { Sticker as PackSticker } from '@stazyu/baileys';
+import type { Sticker as PackSticker } from '@whiskeysockets/baileys';
 import { log } from '../../utils/logger.js';
 import { downloadTelegramStickerPack } from '../../utils/telegramSticker.js';
 

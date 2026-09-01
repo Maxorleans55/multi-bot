@@ -1,7 +1,7 @@
 import sessionManager from './sessionManager.js';
 import BotHandler from '../bot/botHandler.js';
 import { log } from '../utils/logger.js';
-import type { WASocket } from '@stazyu/baileys';
+import type { WASocket } from '@whiskeysockets/baileys';
 
 // Map to track bot handlers per session
 const botHandlers = new Map<string, BotHandler>();

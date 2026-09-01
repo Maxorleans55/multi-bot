@@ -4,8 +4,8 @@ import {
   BaileysEventMap,
   ConnectionState,
   Browsers,
-} from '@stazyu/baileys';
-import type { WASocket } from '@stazyu/baileys';
+} from '@whiskeysockets/baileys';
+import type { WASocket } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 import { Boom } from '@hapi/boom';

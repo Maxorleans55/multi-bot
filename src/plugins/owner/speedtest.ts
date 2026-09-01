@@ -3,7 +3,7 @@ import { promisify } from 'util';
 import https from 'https';
 import http from 'http';
 import type { CommandModule } from '../../types/index.js';
-import { WAMessage } from '@stazyu/baileys';
+import { WAMessage } from '@whiskeysockets/baileys';
 
 const execAsync = promisify(exec);
 

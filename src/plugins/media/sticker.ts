@@ -1,5 +1,5 @@
 import type { CommandModule } from '../../types/index.js';
-import { downloadContentFromMessage } from '@stazyu/baileys';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import { Sticker, StickerTypes } from 'wa-sticker-formatter';
 import { spawn } from 'child_process';
 import { writeFile, unlink, readFile } from 'fs/promises';

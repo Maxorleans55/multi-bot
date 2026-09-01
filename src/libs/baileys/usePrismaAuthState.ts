@@ -5,7 +5,7 @@ import {
   BufferJSON,
   AuthenticationCreds,
   AuthenticationState,
-} from '@stazyu/baileys';
+} from '@whiskeysockets/baileys';
 
 // ─── Single-value helpers ────────────────────────────────────────
 
