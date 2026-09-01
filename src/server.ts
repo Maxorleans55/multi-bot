@@ -16,7 +16,12 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public')));
+const publicDir = path.join(__dirname, '../public');
+app.use(express.static(publicDir));
+
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
 
 app.get('/api/status', (_req, res) => {
   res.json({ status: 'online', bot: process.env.BOT_NAME || 'Bot' });
@@ -162,7 +167,7 @@ app.get('/api/stats', async (_req, res) => {
 });
 
 app.get('*', (_req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+  res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 try {
