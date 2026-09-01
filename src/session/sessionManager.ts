@@ -73,6 +73,7 @@ export class SessionManager {
       logger: this.logger,
       browser: Browsers.windows('Bot-Baileys-AI'),
       generateHighQualityLinkPreview: true,
+      pairingCode: true,
       cachedGroupMetadata: async (jid) => this.groupCache.get(jid),
       getMessage: async (key) => {
         return (await prisma.message.findFirst({
@@ -281,11 +282,19 @@ export class SessionManager {
 
   async requestPairingCode(sessionId: string, phoneNumber: string): Promise<string | null> {
     const socket = this.sessions.get(sessionId);
-    if (!socket) return null;
+    if (!socket) {
+      log.error(`[SessionManager] No socket found for ${sessionId}`);
+      return null;
+    }
     try {
-      const code = await socket.requestPairingCode(phoneNumber);
+      // Check if requestPairingCode method exists
+      if (typeof (socket as any).requestPairingCode !== 'function') {
+        log.error(`[SessionManager] requestPairingCode not available in this Baileys version`);
+        return null;
+      }
+      const code = await (socket as any).requestPairingCode(phoneNumber);
       this.pairingCodeStore.set(sessionId, code);
-      log.info(`🔗 [SessionManager] Pairing code for ${sessionId}: ${code}`);
+      log.info(`🔗 [SessionManager] Pairing code for ${sessionId}: ${code} (phone: ${phoneNumber})`);
       return code;
     } catch (error) {
       log.error(`[SessionManager] Failed to request pairing code for ${sessionId}:`, error as object);

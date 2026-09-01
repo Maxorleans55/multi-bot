@@ -55,13 +55,43 @@ app.post('/api/pairing/:sessionId', async (req, res) => {
       return res.status(400).json({ error: 'Phone number required' });
     }
     const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+
+    // Wait for socket to be ready (up to 15 seconds)
+    let socket = await sessionManager.getSession(sessionId);
+    let retries = 0;
+    while (!socket && retries < 15) {
+      await new Promise(r => setTimeout(r, 1000));
+      socket = await sessionManager.getSession(sessionId);
+      retries++;
+    }
+
+    if (!socket) {
+      return res.status(500).json({ error: 'Session not found. Create session first.' });
+    }
+
+    // Wait for QR to appear (socket connected to WhatsApp servers)
+    let qrReady = false;
+    for (let i = 0; i < 20; i++) {
+      const qr = sessionManager.getQR(sessionId);
+      if (qr) { qrReady = true; break; }
+      // Also check if already connected
+      if (sessionManager.isConnected(sessionId)) { qrReady = true; break; }
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    if (!qrReady && !sessionManager.isConnected(sessionId)) {
+      log.warn(`[Pairing] QR not ready for ${sessionId} after waiting`);
+    }
+
     const code = await sessionManager.requestPairingCode(sessionId, cleanPhone);
     if (code) {
+      log.info(`[Pairing] Generated code ${code} for ${sessionId} (phone: ${cleanPhone})`);
       res.json({ success: true, code });
     } else {
-      res.status(500).json({ error: 'Failed to generate pairing code. Is the session active?' });
+      res.status(500).json({ error: 'Failed to generate pairing code. Check phone number format.' });
     }
   } catch (error) {
+    log.error(`[Pairing] Error:`, error as object);
     res.status(500).json({ error: 'Failed to request pairing code' });
   }
 });
