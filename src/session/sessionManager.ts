@@ -287,18 +287,18 @@ export class SessionManager {
       return null;
     }
     try {
-      // Check if requestPairingCode method exists
-      if (typeof (socket as any).requestPairingCode !== 'function') {
-        log.error(`[SessionManager] requestPairingCode not available. Available methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(socket)).filter(m => m.includes('pair') || m.includes('Pair')).join(', ') || 'none'}`);
+      const fn = (socket as any).requestPairingCode;
+      if (typeof fn !== 'function') {
+        log.error(`[SessionManager] requestPairingCode is NOT a function. Type: ${typeof fn}`);
         return null;
       }
-      log.info(`[SessionManager] Requesting pairing code for ${sessionId} (phone: ${phoneNumber})`);
-      const code = await (socket as any).requestPairingCode(phoneNumber);
+      log.info(`[SessionManager] Calling requestPairingCode for ${sessionId} (phone: ${phoneNumber})`);
+      const code = await fn.call(socket, phoneNumber);
       this.pairingCodeStore.set(sessionId, code);
       log.info(`🔗 [SessionManager] Pairing code for ${sessionId}: ${code}`);
       return code;
     } catch (error) {
-      log.error(`[SessionManager] Failed to request pairing code for ${sessionId}:`, error as object);
+      log.error(`[SessionManager] requestPairingCode error for ${sessionId}:`, error as object);
       return null;
     }
   }

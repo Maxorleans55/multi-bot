@@ -56,39 +56,36 @@ app.post('/api/pairing/:sessionId', async (req, res) => {
     }
     const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
 
-    // Wait for socket to be ready (up to 15 seconds)
+    // Wait for socket to be ready
     let socket = await sessionManager.getSession(sessionId);
     let retries = 0;
-    while (!socket && retries < 15) {
+    while (!socket && retries < 20) {
       await new Promise(r => setTimeout(r, 1000));
       socket = await sessionManager.getSession(sessionId);
       retries++;
     }
 
     if (!socket) {
-      return res.status(500).json({ error: 'Session not found. Create session first.' });
+      return res.status(500).json({ error: 'Session not found after 20s. Create session first.' });
     }
 
-    // Wait for QR to appear (socket connected to WhatsApp servers)
+    // Wait for QR to appear — this means socket is connected to WA servers
     let qrReady = false;
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 30; i++) {
       const qr = sessionManager.getQR(sessionId);
       if (qr) { qrReady = true; break; }
-      // Also check if already connected
       if (sessionManager.isConnected(sessionId)) { qrReady = true; break; }
       await new Promise(r => setTimeout(r, 1000));
     }
 
-    if (!qrReady && !sessionManager.isConnected(sessionId)) {
-      log.warn(`[Pairing] QR not ready for ${sessionId} after waiting`);
-    }
+    log.info(`[Pairing] QR ready for ${sessionId}: ${qrReady}`);
 
     const code = await sessionManager.requestPairingCode(sessionId, cleanPhone);
     if (code) {
-      log.info(`[Pairing] Generated code ${code} for ${sessionId} (phone: ${cleanPhone})`);
+      log.info(`[Pairing] SUCCESS: code ${code} for ${sessionId} (phone: ${cleanPhone})`);
       res.json({ success: true, code });
     } else {
-      res.status(500).json({ error: 'Failed to generate pairing code. Check phone number format.' });
+      res.status(500).json({ error: 'Failed to generate pairing code. Check Codespace terminal for errors.' });
     }
   } catch (error) {
     log.error(`[Pairing] Error:`, error as object);
@@ -126,11 +123,22 @@ app.post('/api/sessions', async (req, res) => {
       return res.status(400).json({ error: 'Session ID required' });
     }
 
-    // Force clear existing session data to generate fresh QR code
-    await sessionManager.disconnectSession(sessionId);
-    await createSession(sessionId, true);  // forceClear = true
+    // Force clear existing session data completely
+    try { await sessionManager.disconnectSession(sessionId); } catch {}
 
-    res.json({ success: true, sessionId, message: 'Session created. Check QR code.' });
+    // Also clear ALL auth data from DB for this session
+    try {
+      const { default: prisma } = await import('./database/prisma.js');
+      await prisma.waAuthState.deleteMany({ where: { sessionId } });
+      await prisma.waSession.deleteMany({ where: { sessionId } });
+    } catch {}
+
+    // Small delay to ensure cleanup is complete
+    await new Promise(r => setTimeout(r, 500));
+
+    await createSession(sessionId, true);
+
+    res.json({ success: true, sessionId, message: 'Session created.' });
   } catch (error) {
     res.status(500).json({ error: `Failed to create session: ${error}` });
   }
