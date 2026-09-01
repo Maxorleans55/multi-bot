@@ -25,6 +25,7 @@ export type SessionDisconnectCallback = (sessionId: string) => void | Promise<vo
 
 export class SessionManager {
   private sessions: Map<string, WASocket> = new Map();
+  private connectedSessions: Set<string> = new Set();
   private reconnectAttempts: Map<string, number> = new Map();
   private maxReconnectAttempts = 10;
   private sessionCallbacks: SessionCallback[] = [];
@@ -197,6 +198,7 @@ export class SessionManager {
           (lastDisconnect?.error as Boom)?.output?.statusCode ===
           DisconnectReason.loggedOut;
 
+        this.connectedSessions.delete(sessionId);
         const shouldReconnect = !isLoggedOut;
 
         log.info(
@@ -241,6 +243,7 @@ export class SessionManager {
       } else if (connection === 'open') {
         this.reconnectAttempts.delete(sessionId);
         this.qrStore.delete(sessionId);
+        this.connectedSessions.add(sessionId);
         log.info(`Connection opened for session ${sessionId}`);
 
         const userId = socket.user?.id;
@@ -271,7 +274,7 @@ export class SessionManager {
   }
 
   isConnected(sessionId: string): boolean {
-    return this.sessions.has(sessionId);
+    return this.connectedSessions.has(sessionId);
   }
 
   async disconnectSession(sessionId: string): Promise<void> {
@@ -279,6 +282,7 @@ export class SessionManager {
     if (socket) {
       await socket.logout();
       this.sessions.delete(sessionId);
+      this.connectedSessions.delete(sessionId);
       await this.deleteSessionFromDB(sessionId);
       await this.triggerDisconnectCallbacks(sessionId);
     }
@@ -303,6 +307,7 @@ export class SessionManager {
       await this.triggerDisconnectCallbacks(sessionId);
     }
     this.sessions.clear();
+    this.connectedSessions.clear();
   }
 
   private async saveSessionToDB(sessionId: string): Promise<void> {

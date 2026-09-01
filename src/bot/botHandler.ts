@@ -556,6 +556,10 @@ export class BotHandler {
                 return;
               }
             }
+            // Reject image/video/audio messages — current AI model doesn't support media input
+            if (simplified.isImage || simplified.isVideo || simplified.isAudio || simplified.isSticker) {
+              return;
+            }
             log.info(`[${this.sessionId}] 🤖 Group auto-reply triggered for: ${from}`);
             await this.handleGroupAutoReply(simplified, from, message);
             return;
@@ -573,6 +577,13 @@ export class BotHandler {
           // Dua lapis: sync cache (no overhead) || async DB fallback (cold cache)
           const aiEnabled = isAIModeEnabled(targetUserId) || await isAIModeEnabledAsync(targetUserId);
           if (aiEnabled && body) {
+            // Reject image/video/audio messages — current AI model doesn't support media input
+            if (simplified.isImage || simplified.isVideo || simplified.isAudio || simplified.isSticker) {
+              await this.socket.sendMessage(from, {
+                text: '❌ AI saat ini hanya bisa memproses teks. Kirim pesan teks saja ya.',
+              });
+              return;
+            }
             // ── Daily limit: private AI ──────────────────────────────
             if (user_id && !isOwner(user_id) && premiumService.isPrivateAiLimitEnabled()) {
               const privateAiCheck = await premiumService.checkPrivateAiLimit(user_id);
