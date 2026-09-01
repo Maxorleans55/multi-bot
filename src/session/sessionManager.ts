@@ -289,12 +289,13 @@ export class SessionManager {
     try {
       // Check if requestPairingCode method exists
       if (typeof (socket as any).requestPairingCode !== 'function') {
-        log.error(`[SessionManager] requestPairingCode not available in this Baileys version`);
+        log.error(`[SessionManager] requestPairingCode not available. Available methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(socket)).filter(m => m.includes('pair') || m.includes('Pair')).join(', ') || 'none'}`);
         return null;
       }
+      log.info(`[SessionManager] Requesting pairing code for ${sessionId} (phone: ${phoneNumber})`);
       const code = await (socket as any).requestPairingCode(phoneNumber);
       this.pairingCodeStore.set(sessionId, code);
-      log.info(`🔗 [SessionManager] Pairing code for ${sessionId}: ${code} (phone: ${phoneNumber})`);
+      log.info(`🔗 [SessionManager] Pairing code for ${sessionId}: ${code}`);
       return code;
     } catch (error) {
       log.error(`[SessionManager] Failed to request pairing code for ${sessionId}:`, error as object);
