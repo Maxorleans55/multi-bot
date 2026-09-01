@@ -289,9 +289,11 @@ export class BotHandler {
 
     // Handle messages
     this.socket.ev.on('messages.upsert', async ({ messages, type }) => {
+      log.info(`📩 [${this.sessionId}] messages.upsert fired: type=${type}, count=${messages.length}`);
       if (type !== 'notify') return;
 
       for (const message of messages) {
+        log.info(`📩 [${this.sessionId}] Message from=${message.key?.remoteJid}, fromMe=${message.key?.fromMe}, id=${message.key?.id}, hasMessage=${!!message.message}`);
         // Wrap each message in its own try/catch so one bad message never blocks the rest
         try {
           await this.handleMessage(message);
@@ -385,6 +387,7 @@ export class BotHandler {
 
       // ── Step 2: Comprehensive message validation ─────────────────────────
       const validation = validateMessage(message as unknown as Record<string, any>);
+      log.info(`📩 [${this.sessionId}] Validation: valid=${validation.valid}, code=${validation.code || 'none'}, reason=${validation.reason || 'none'}`);
 
       if (!validation.valid) {
         // Log silently for common noise (self-sent, fromMe, duplicates)
