@@ -76,7 +76,7 @@ export class SessionManager {
     const socket = makeWASocket({
       auth: state,
       logger: this.logger,
-      browser: Browsers.windows('Bot-Baileys-AI'),
+      browser: Browsers.windows('Chrome'),
       generateHighQualityLinkPreview: true,
       cachedGroupMetadata: async (jid) => this.groupCache.get(jid),
       getMessage: async (key) => {
