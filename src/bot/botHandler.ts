@@ -290,7 +290,7 @@ export class BotHandler {
     // Handle messages
     this.socket.ev.on('messages.upsert', async ({ messages, type }) => {
       log.info(`📩 [${this.sessionId}] messages.upsert fired: type=${type}, count=${messages.length}`);
-      if (type !== 'notify') return;
+      if (type !== 'notify' && type !== 'append') return;
 
       for (const message of messages) {
         log.info(`📩 [${this.sessionId}] Message from=${message.key?.remoteJid}, fromMe=${message.key?.fromMe}, id=${message.key?.id}, hasMessage=${!!message.message}`);
