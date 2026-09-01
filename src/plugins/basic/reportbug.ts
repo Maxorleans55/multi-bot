@@ -6,8 +6,8 @@ const reportbugCommand: CommandModule = {
   config: {
     name: 'reportbug',
     aliases: ['bug', 'lapor', 'report'],
-    description: 'Laporkan bug atau masalah ke owner bot',
-    usage: '!reportbug <deskripsi bug>',
+    description: 'Report a bug or issue to the bot owner',
+    usage: '!reportbug <bug description>',
     category: 'basic',
   },
   handler: async function (context, args: string[]): Promise<void> {
@@ -15,7 +15,7 @@ const reportbugCommand: CommandModule = {
 
     if (!message) {
       await context.socket.sendMessage(context.fromJid, {
-        text: `❌ Format: ${context.simplified?.prefix || '!'}reportbug <deskripsi bug>\n\nContoh: ${context.simplified?.prefix || '!'}reportbug Fitur download TikTok tidak bekerja untuk link tertentu`,
+        text: `❌ Format: ${context.simplified?.prefix || '!'}reportbug <bug description>\n\nExample: ${context.simplified?.prefix || '!'}reportbug TikTok download feature not working for certain links`,
       });
       return;
     }
@@ -37,7 +37,7 @@ const reportbugCommand: CommandModule = {
 
     if (owners.length === 0) {
       await context.socket.sendMessage(context.fromJid, {
-        text: '❌ Tidak ada nomor owner yang terdaftar. Laporan tidak dapat dikirim.',
+        text: '❌ No owner number registered. Report cannot be sent.',
       });
       return;
     }
@@ -54,11 +54,11 @@ const reportbugCommand: CommandModule = {
 
     if (sentCount > 0) {
       await context.socket.sendMessage(context.fromJid, {
-        text: `✅ Laporan bug berhasil dikirim ke ${sentCount} owner. Terima kasih atas laporannya!`,
+        text: `✅ Bug report sent to ${sentCount} owner(s). Thank you for your report!`,
       });
     } else {
       await context.socket.sendMessage(context.fromJid, {
-        text: '❌ Gagal mengirim laporan ke owner. Silakan coba lagi nanti.',
+        text: '❌ Failed to send report to owner. Please try again later.',
       });
     }
   },

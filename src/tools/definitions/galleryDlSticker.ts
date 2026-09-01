@@ -106,14 +106,14 @@ export const execute: ToolExecuteFunction = async (args, context) => {
   if (!url && !query) {
     return {
       success: false,
-      message: "URL Pinterest atau kata kunci tidak diberikan.",
+      message: "Pinterest URL or keyword not provided.",
     };
   }
 
   if (!context.socket || !context.fromJid) {
     return {
       success: false,
-      message: "Konteks chat tidak tersedia, jadi sticker tidak bisa dikirim.",
+      message: "Chat context not available, so sticker cannot be sent.",
     };
   }
 
@@ -124,7 +124,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
   const resolvedPackName = buildPackName(packName, query, "Sticker Pack");
   const resolvedAuthorName =
     authorName ||
-    "Di buat oleh : Staz AI Bot\n\nJangan lupa follow IG owner @wahyuhp57";
+    "Created by: Staz AI Bot\n\nDon't forget to follow the owner's IG @wahyuhp57";
 
   console.log(
     `[Tool:PinterestSticker] 🎨 Creating: ${url || query} (count: ${count}, type: ${stickerType})`,
@@ -149,7 +149,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
       return {
         success: true,
         message:
-          "Sticker dari Pinterest berhasil dibuat dan sudah dikirim ke user.",
+          "Pinterest sticker created and sent to user.",
         data: {
           sourceFileName: result.sourceFileName,
           downloadedFiles: result.downloadedFiles,
@@ -170,7 +170,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     });
 
     if (batchResult.stickers.length === 0) {
-      return { success: false, message: "Gagal membuat sticker." };
+      return { success: false, message: "Failed to create sticker." };
     }
 
     // Send all stickers at once as one sticker pack (Baileys PR #1561 / @stazyu fork)
@@ -191,7 +191,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
 
     return {
       success: true,
-      message: `Berhasil membuat ${batchResult.stickers.length} sticker dari Pinterest dan dikirim sebagai sticker pack "${resolvedPackName}". Total ${batchResult.totalDownloaded} gambar ditemukan.`,
+      message: `Successfully created ${batchResult.stickers.length} stickers from Pinterest and sent as sticker pack "${resolvedPackName}". Total ${batchResult.totalDownloaded} images found.`,
       data: {
         requestedCount: count,
         sentCount: batchResult.stickers.length,

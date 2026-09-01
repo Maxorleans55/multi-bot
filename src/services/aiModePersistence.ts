@@ -5,12 +5,12 @@ import { log } from '../utils/logger.js';
 /**
  * AI Mode Persistence Service
  *
- * Menyimpan status AI mode (on/off) per-user ke database (User.aiModeEnabled)
- * dengan node-cache in-memory untuk menghindari overhead DB query setiap
- * pengecekan saat pesan masuk.
+ * Stores AI mode status (on/off) per-user in the database (User.aiModeEnabled)
+ * with node-cache in-memory to avoid DB query overhead on every
+ * message check.
  *
- * Pola: lazy-load dari DB pada first access, write-through ke DB pada setiap
- * perubahan, cache TTL 30 menit dengan checkperiod 5 menit.
+ * Pattern: lazy-load from DB on first access, write-through to DB on every
+ * change, cache TTL 30 minutes with checkperiod 5 minutes.
  */
 
 const AI_MODE_CACHE = new NodeCache({ stdTTL: 1800, checkperiod: 300 });

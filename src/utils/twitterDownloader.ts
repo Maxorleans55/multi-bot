@@ -91,12 +91,12 @@ export function buildTwitterCaption(
 export function parseTwitterError(error: any): string {
   const stderr = error?.stderr || '';
   if (stderr.includes('Unsupported URL') || stderr.includes('no matching extractor')) {
-    return 'URL Twitter/X tidak valid atau tidak didukung.';
+    return 'Invalid or unsupported Twitter/X URL.';
   }
   if (stderr.includes('does not exist') || stderr.includes('Not Found')) {
-    return 'Tweet tidak ditemukan. Mungkin telah dihapus.';
+    return 'Tweet not found. It may have been deleted.';
   }
-  return 'Gagal mengunduh media dari Twitter/X. Pastikan URL benar dan tweet memiliki media.';
+  return 'Failed to download media from Twitter/X. Make sure the URL is correct and the tweet contains media.';
 }
 
 /**
@@ -140,7 +140,7 @@ export async function downloadTwitterMedia(url: string, info: TwitterMediaInfo):
   if (!hasFormats && !info.thumbnail) {
     return {
       success: false,
-      error: 'Tidak ada media yang dapat diunduh dari tweet ini.',
+      error: 'No media available to download from this tweet.',
       info,
     };
   }
@@ -171,7 +171,7 @@ export async function downloadTwitterMedia(url: string, info: TwitterMediaInfo):
     } catch {
       return {
         success: false,
-        error: 'Gagal mengunduh media dari Twitter/X.',
+        error: 'Failed to download media from Twitter/X.',
         info,
       };
     }
@@ -185,7 +185,7 @@ export async function downloadTwitterMedia(url: string, info: TwitterMediaInfo):
   if (!downloadedFile) {
     return {
       success: false,
-      error: 'File tidak ditemukan setelah download.',
+      error: 'File not found after download.',
       info,
     };
   }
@@ -199,7 +199,7 @@ export async function downloadTwitterMedia(url: string, info: TwitterMediaInfo):
       await fs.unlink(filePath);
       return {
         success: false,
-        error: `File terlalu besar (${(stats.size / 1024 / 1024).toFixed(2)}MB). Batas WhatsApp adalah 50MB.`,
+        error: `File too large (${(stats.size / 1024 / 1024).toFixed(2)}MB). WhatsApp limit is 50MB.`,
         info,
       };
     }
@@ -218,7 +218,7 @@ export async function downloadTwitterMedia(url: string, info: TwitterMediaInfo):
   } catch {
     return {
       success: false,
-      error: 'Gagal membaca file yang diunduh.',
+      error: 'Failed to read the downloaded file.',
       info,
     };
   }

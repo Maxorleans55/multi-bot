@@ -14,8 +14,8 @@ const AICommand: CommandModule = {
   config: {
     name: "ai",
     aliases: ["ask", "chatai", "aioff", "aion"],
-    description: "Aktifkan mode AI untuk chatting",
-    usage: "!ai <pertanyaan>",
+    description: "Enable AI mode for chat",
+    usage: "!ai <question>",
     category: "ai",
   },
   onLoad() {
@@ -27,7 +27,7 @@ const AICommand: CommandModule = {
     if (args[0]?.toLowerCase() === "on") {
       await setAIModeEnabled(userId, true);
       await context.socket.sendMessage(context.fromJid, {
-        text: "✅ Mode AI aktif! Semua pesan yang kamu kirim akan ditangani oleh AI.\n\nGunakan !aioff untuk menonaktifkan mode AI.",
+        text: "✅ AI mode ON! All messages will be handled by AI.\n\nUse !aioff to disable AI mode.",
       });
       return;
     }
@@ -36,7 +36,7 @@ const AICommand: CommandModule = {
       aiService.clearConversation(userId);
       await setAIModeEnabled(userId, false);
       await context.socket.sendMessage(context.fromJid, {
-        text: "❌ Mode AI dinonaktifkan. Kembali ke mode perintah normal.",
+        text: "❌ AI mode OFF. Back to normal command mode.",
       });
       return;
     }
@@ -44,14 +44,14 @@ const AICommand: CommandModule = {
     if (args[0]?.toLowerCase() === "model" && args[1]) {
       if (!isOwner(userId)) {
         await context.socket.sendMessage(context.fromJid, {
-          text: "❌ Hanya owner yang bisa mengganti model AI.",
+          text: "❌ Only the owner can change the AI model.",
         });
         return;
       }
       const model = args.slice(1).join(" ");
       aiService.setModel(model);
       await context.socket.sendMessage(context.fromJid, {
-        text: `✅ Model AI diganti ke: ${model}`,
+        text: `✅ AI model changed to: ${model}`,
       });
       return;
     }
@@ -73,19 +73,19 @@ const AICommand: CommandModule = {
         models = await AIService.listOllamaModels();
         if (models.length === 0) {
           info =
-            "\n\n⚠️ Tidak bisa terhubung ke Ollama. Pastikan Ollama berjalan dan `OLLAMA_BASE_URL` benar.";
+            "\n\n⚠️ Cannot connect to Ollama. Make sure Ollama is running and `OLLAMA_BASE_URL` is correct.";
         }
         info +=
-          "\n\nGunakan `!ai model <nama model>` untuk mengganti (hanya owner).";
+          "\n\nUse `!ai model <model name>` to change (owner only).";
       } else if (provider === "openai" || provider === "other") {
-        // OpenAI-compatible custom API — coba fetch dari endpoint /models
+        // OpenAI-compatible custom API — try to fetch from endpoint /models
         models = await AIService.getAvailableModels(provider);
         if (models.length === 0) {
           info =
-            "\n\n⚠️ Tidak bisa mengambil daftar model dari API. Set model manual dengan `!ai model <nama model>`.";
+            "\n\n⚠️ Cannot fetch model list from API. Set model manually with `!ai model <model name>`.";
         } else {
           info =
-            "\n\nGunakan `!ai model <nama model>` untuk mengganti (hanya owner).";
+            "\n\nUse `!ai model <model name>` to change (owner only).";
         }
       } else {
         // openrouter
@@ -173,7 +173,7 @@ ${isOwner(userId) ? `• ${context.simplified?.prefix || "!"}ai model <nama mode
 
 /**
  * Periksa apakah AI mode aktif untuk user tertentu.
- * Menggunakan node-cache (sync) — tanpa DB hit. Cache dipopulasi saat startup
+  * Uses node-cache (sync) — no DB hit. Cache is populated at startup
  * (via initAIModePersistence) dan di-update write-through saat toggle.
  */
 export function isAIModeEnabled(userId: string): boolean {

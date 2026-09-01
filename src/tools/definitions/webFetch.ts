@@ -66,7 +66,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
   const format = (args.formats as string) || 'markdown';
 
   if (!url) {
-    return { success: false, message: 'URL tidak diberikan.' };
+    return { success: false, message: 'URL not provided.' };
   }
 
   // Basic URL validation
@@ -75,7 +75,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
   } catch {
     return {
       success: false,
-      message: `URL "${url}" tidak valid. Pastikan URL lengkap dengan protocol (http:// atau https://).`,
+      message: `URL "${url}" is invalid. Make sure the URL includes the protocol (http:// or https://).`,
     };
   }
 
@@ -84,7 +84,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     return {
       success: false,
       message:
-        'Web fetch tidak dapat digunakan karena FIRECRAWL_URL belum dikonfigurasi. Silakan set FIRECRAWL_URL di file .env.',
+        'Web fetch cannot be used because FIRECRAWL_URL is not configured. Please set FIRECRAWL_URL in the .env file.',
     };
   }
 
@@ -139,7 +139,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     if (!content) {
       return {
         success: false,
-        message: `Halaman ${url} tidak mengandung konten yang bisa diekstrak (mungkin halaman kosong atau memerlukan login).`,
+        message: `Page ${url} does not contain extractable content (may be empty or require login).`,
       };
     }
 
@@ -154,7 +154,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
 
     return {
       success: true,
-      message: `Berhasil membaca halaman "${title || url}". ${contentForAI.length} karakter berhasil diekstrak${truncated ? ` (dari total ${content.length})` : ''}.`,
+      message: `Successfully read page "${title || url}". ${contentForAI.length} characters extracted${truncated ? ` (from total ${content.length})` : ''}.`,
       data: {
         url,
         title,
@@ -188,21 +188,21 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     if (status === 404) {
       return {
         success: false,
-        message: `Endpoint Firecrawl tidak ditemukan (404) di ${getFirecrawlUrl()}/v2/scrape. Periksa konfigurasi FIRECRAWL_URL.`,
+        message: `Firecrawl endpoint not found (404) at ${getFirecrawlUrl()}/v2/scrape. Check FIRECRAWL_URL configuration.`,
       };
     }
 
     if (status === 400) {
       return {
         success: false,
-        message: `Permintaan tidak valid (400) — periksa apakah URL yang diberikan benar: ${url}`,
+        message: `Invalid request (400) — check if the provided URL is correct: ${url}`,
       };
     }
 
     if (status === 504) {
       return {
         success: false,
-        message: `Firecrawl timeout (504) saat memproses ${url}. Halaman mungkin terlalu lambat atau berat. Coba URL lain.`,
+        message: `Firecrawl timeout (504) while processing ${url}. The page may be too slow or heavy. Try a different URL.`,
       };
     }
 

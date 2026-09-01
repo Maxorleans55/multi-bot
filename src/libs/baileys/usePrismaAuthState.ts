@@ -129,7 +129,7 @@ export async function usePrismaAuthState(
         create: { sessionId, type: 'creds', key: 'creds', value: serialized },
       });
     } catch (err) {
-      log.error(`[saveCreds] Gagal menyimpan creds session "${sessionId}":`, err as object);
+      log.error(`[saveCreds] Failed to save session "${sessionId}" creds:`, err as object);
     }
   };
 

@@ -387,17 +387,17 @@ const stickerPackCommand: CommandModule = {
 
           const targets = resolveTargets(message, simplified, key);
           if (targets.length === 0) {
-            await reply('❌ Reply ke sticker/gambar/album dulu untuk menambahkannya ke pack.');
+            await reply('❌ Reply to a sticker/image/album first to add it to the pack.');
             return;
           }
 
           const { added, skipped } = await addMediaMessages(targets, coll);
           if (added === 0) {
-            await reply(`❌ Tidak ada media valid yang bisa ditambahkan${skipped > 0 ? ` (${skipped} gagal diunduh/dikonversi)` : ''}.`);
+            await reply(`❌ No valid media could be added${skipped > 0 ? ` (${skipped} failed to download/convert)` : ''}.`);
             return;
           }
           await reply(
-            `✅ ${added} sticker ditambahkan ke pack "${coll.name}" (total ${coll.stickers.length}/${MAX_STICKERS})${skipped > 0 ? `, ${skipped} dilewati` : ''}.\nKirim dengan \`!stickerpack send\`.`,
+            `✅ ${added} sticker(s) added to pack "${coll.name}" (total ${coll.stickers.length}/${MAX_STICKERS})${skipped > 0 ? `, ${skipped} skipped` : ''}.\nSend with \`!stickerpack send\`.`,
           );
           return;
         }
@@ -406,7 +406,7 @@ const stickerPackCommand: CommandModule = {
         case 'kirim': {
           const coll = packCollectionStore.get(key);
           if (!coll || coll.stickers.length === 0) {
-            await reply('⚠️ Pack kosong. Tambahkan sticker dulu (reply media + `!stickerpack add`) atau mulai baru dengan `!stickerpack <Nama>`.');
+            await reply('⚠️ Pack is empty. Add stickers first (reply to media + `!stickerpack add`) or start a new one with `!stickerpack <Name>`.');
             return;
           }
           await socket.sendMessage(fromJid, {
@@ -491,17 +491,16 @@ const stickerPackCommand: CommandModule = {
           if (targets.length > 0) {
             const { added, skipped } = await addMediaMessages(targets, coll);
             if (added > 0) {
-              await reply(`✅ Pack "${name}" dibuat dengan ${added} sticker${skipped > 0 ? `, ${skipped} dilewati` : ''}.\nTambahkan lagi dengan reply media + \`!stickerpack add\`, lalu \`!stickerpack send\`.`);
-              return;
+              await reply(`✅ Pack "${name}" created with ${added} sticker(s)${skipped > 0 ? `, ${skipped} skipped` : ''}.\nAdd more by replying to media + \`!stickerpack add\`, then \`!stickerpack send\`.`);              return;
             }
           }
-          await reply(`✅ Pack "${name}" (${publisher}) dibuat.\nReply ke sticker/gambar/album lalu gunakan \`!stickerpack add\` untuk menambah, \`!stickerpack send\` untuk mengirim.`);
+          await reply(`✅ Pack "${name}" (${publisher}) created.\nReply to a sticker/image/album then use \`!stickerpack add\` to add, \`!stickerpack send\` to send.`);
           return;
         }
       }
     } catch (error) {
       log.error('❌ Error creating sticker pack:', error as object);
-      await reply('❌ Gagal membuat sticker pack. Pastikan gambar/sticker valid dan ukurannya < 1MB.');
+      await reply('❌ Failed to create sticker pack. Make sure the image/sticker is valid and under 1MB.');
     }
   },
 };

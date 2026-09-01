@@ -93,14 +93,14 @@ const telegramStickerPackCommand: CommandModule = {
     const parsed = parseArgs(args);
     if (!parsed) {
       await reply(
-        '❌ Mohon berikan URL atau nama pack Telegram.\nUsage: `!tgstickerpack <t.me/addstickers url | nama-pack> [Nama|Publisher]`',
+        '❌ Please provide a Telegram sticker pack URL or name.\nUsage: `!tgstickerpack <t.me/addstickers url | pack-name> [Name|Publisher]`',
       );
       return;
     }
 
     await reply(
-      `⏳ Mengunduh & mengonversi sticker pack Telegram "${parsed.packInput}"...\n` +
-        'Proses ini bisa memakan waktu 1-3 menit untuk pack beranimasi (tgs).',
+      `⏳ Downloading & converting Telegram sticker pack "${parsed.packInput}"...\n` +
+        'This may take 1-3 minutes for animated packs (tgs).',
     );
 
     // AGENT.md: show typing indicator during long operations.
@@ -116,7 +116,7 @@ const telegramStickerPackCommand: CommandModule = {
       const { stickerBuffers } = result;
 
       if (stickerBuffers.length === 0) {
-        await reply('❌ Pack Telegram ditemukan, tapi tidak ada sticker yang bisa dikonversi.');
+        await reply('❌ Telegram pack found, but no stickers could be converted.');
         return;
       }
 
@@ -129,7 +129,7 @@ const telegramStickerPackCommand: CommandModule = {
         accessibilityLabel: `Telegram Sticker ${i + 1}`,
       }));
 
-      // Publisher fallback ke nama pack asli bila user tidak menspesifikasi,
+      // Publisher fallback to original pack name if user doesn't specify,
       // supaya info pack tetap bermakna (nama pack dikirim untuk seluruh pack,
       // termasuk sticker animasi — level pack, bukan per-sticker).
       const publisher =
@@ -147,23 +147,23 @@ const telegramStickerPackCommand: CommandModule = {
       });
 
       const animationNote = result.usedWebmFallback
-        ? `\n🎞️ ${result.webmConverted} sticker animasi dikonversi dari webm → webp animasi via ffmpeg.`
+        ? `\n🎞️ ${result.webmConverted} animated stickers converted from webm → animated webp via ffmpeg.`
         : '';
       const oversizeNote =
         result.skippedOversize > 0
-          ? `\n⚠️ ${result.skippedOversize} sticker dilewati karena melebihi batas ukuran 1MB WhatsApp.`
+          ? `\n⚠️ ${result.skippedOversize} sticker(s) skipped for exceeding WhatsApp's 1MB size limit.`
           : '';
       const truncatedNote =
         stickerBuffers.length > selected.length
-          ? `\n⚠️ Pack asli memiliki ${stickerBuffers.length} sticker; hanya ${selected.length} yang dikirim (batas WhatsApp).`
+          ? `\n⚠️ Original pack had ${stickerBuffers.length} stickers; only ${selected.length} sent (WhatsApp limit).`
           : '';
       await reply(
-        `✅ Sticker pack Telegram "${result.packName}" (${selected.length} sticker) berhasil dikonversi & terkirim!${animationNote}${oversizeNote}${truncatedNote}`,
+        `✅ Telegram sticker pack "${result.packName}" (${selected.length} stickers) converted & sent!${animationNote}${oversizeNote}${truncatedNote}`,
       );
     } catch (error) {
       log.error('❌ [Command:tgstickerpack] Error:', error as object);
       const message = error instanceof Error ? error.message : 'Unknown error';
-      await reply(`❌ Gagal mengonversi sticker pack Telegram: ${message}`);
+      await reply(`❌ Failed to convert Telegram sticker pack: ${message}`);
     } finally {
       await socket.sendPresenceUpdate('paused', fromJid).catch(() => undefined);
     }

@@ -13,7 +13,7 @@ const twitterCommand: CommandModule = {
   config: {
     name: 'twitter',
     aliases: ['x', 'tw', 'twdl', 'xdl'],
-    description: 'Download media (video/image) dari Twitter/X',
+    description: 'Download media (video/image) from Twitter/X',
     usage: '!twitter <twitter/x-url>\n!x <twitter/x-url>\nExample: !twitter https://twitter.com/user/status/123456\nExample: !x https://x.com/user/status/123456',
     category: 'media',
   },
@@ -29,13 +29,13 @@ const twitterCommand: CommandModule = {
 
     if (!isValidTwitterUrl(url)) {
       await context.socket.sendMessage(context.fromJid, {
-        text: '❌ URL tidak valid. Harus berupa link tweet Twitter/X.\n\nContoh:\n- https://twitter.com/user/status/123456\n- https://x.com/user/status/123456',
+        text: '❌ Invalid URL. Must be a Twitter/X tweet link.\n\nExample:\n- https://twitter.com/user/status/123456\n- https://x.com/user/status/123456',
       });
       return;
     }
 
     await context.socket.sendMessage(context.fromJid, {
-      text: `🐦 Mendownload media dari Twitter/X...`,
+      text: `🐦 Downloading media from Twitter/X...`,
     });
 
     try {
@@ -44,7 +44,7 @@ const twitterCommand: CommandModule = {
 
       if (!info || !info.title) {
         await context.socket.sendMessage(context.fromJid, {
-          text: '❌ Gagal mendapatkan informasi tweet. URL mungkin tidak valid.',
+          text: '❌ Failed to get tweet info. URL may be invalid.',
         });
         return;
       }
@@ -56,7 +56,7 @@ const twitterCommand: CommandModule = {
         // If no media, show tweet info
         if (result.error?.includes('Tidak ada media')) {
           await context.socket.sendMessage(context.fromJid, {
-            text: `📝 *Tweet Info*\n\n👤 ${info.uploader || 'Unknown'} (@${info.uploader_id || 'unknown'})\n📄 ${info.title || ''}\n\n❌ Tidak ada media yang dapat diunduh dari tweet ini.`,
+            text: `📝 *Tweet Info*\n\n👤 ${info.uploader || 'Unknown'} (@${info.uploader_id || 'unknown'})\n📄 ${info.title || ''}\n\n❌ No media available to download from this tweet.`,
           });
         } else {
           await context.socket.sendMessage(context.fromJid, {
@@ -102,7 +102,7 @@ const twitterCommand: CommandModule = {
       console.error('Twitter/X download error:', error);
       const errorMessage = parseTwitterError(error);
       await context.socket.sendMessage(context.fromJid, {
-        text: `❌ ${errorMessage}\n\nPastikan URL benar dan tweet memiliki media.\nBila masalah berlanjut, silahkan hubungi Owner.`,
+        text: `❌ ${errorMessage}\n\nPlease make sure the URL is correct and the tweet contains media.\nIf the problem persists, please contact the Owner.`,
       });
     }
   },

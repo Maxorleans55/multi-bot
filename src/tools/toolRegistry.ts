@@ -89,7 +89,7 @@ export class ToolRegistry {
         tool_call_id: toolCall.id,
         content: JSON.stringify({
           success: false,
-          message: `Tool "${toolName}" tidak tersedia.`,
+          message: `Tool "${toolName}" is not available.`,
         }),
       };
     }

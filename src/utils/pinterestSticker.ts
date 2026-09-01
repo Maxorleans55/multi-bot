@@ -109,7 +109,7 @@ function resolveInput(options: PinterestStickerOptions | PinterestStickerBatchOp
 
   const query = rawQuery || rawUrl;
   if (!query) {
-    throw new Error('URL Pinterest atau kata kunci pencarian tidak diberikan.');
+    throw new Error('Pinterest URL or search keyword not provided.');
   }
 
   return { targetUrl: buildSearchUrl(query), sourceLabel: query };
@@ -175,7 +175,7 @@ async function runGalleryDl(url: string, outputDir: string, index: number): Prom
     child.on('error', (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
       if (error.code === 'ENOENT') {
-        reject(new Error('gallery-dl tidak ditemukan. Install dulu dengan "python -m pip install -U gallery-dl" atau set PINTEREST_DL_BIN.'));
+        reject(new Error('gallery-dl not found. Install with "python -m pip install -U gallery-dl" or set PINTEREST_DL_BIN.'));
         return;
       }
       reject(error);
@@ -184,7 +184,7 @@ async function runGalleryDl(url: string, outputDir: string, index: number): Prom
     child.on('close', (code) => {
       clearTimeout(timer);
       if (timedOut) {
-        reject(new Error('gallery-dl timeout saat mengambil media dari Pinterest.'));
+        reject(new Error('gallery-dl timeout while fetching media from Pinterest.'));
         return;
       }
       if (code === 0) {
@@ -242,7 +242,7 @@ async function runGalleryDlBatch(url: string, outputDir: string, startIndex: num
     child.on('error', (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
       if (error.code === 'ENOENT') {
-        reject(new Error('gallery-dl tidak ditemukan. Install dulu dengan "python -m pip install -U gallery-dl" atau set PINTEREST_DL_BIN.'));
+        reject(new Error('gallery-dl not found. Install with "python -m pip install -U gallery-dl" or set PINTEREST_DL_BIN.'));
         return;
       }
       reject(error);
@@ -251,7 +251,7 @@ async function runGalleryDlBatch(url: string, outputDir: string, startIndex: num
     child.on('close', (code) => {
       clearTimeout(timer);
       if (timedOut) {
-        reject(new Error('gallery-dl timeout saat mengambil media dari Pinterest.'));
+        reject(new Error('gallery-dl timeout while fetching media from Pinterest.'));
         return;
       }
       // gallery-dl returns non-zero if some items in range don't exist,
@@ -275,7 +275,7 @@ export async function createPinterestSticker(options: PinterestStickerOptions): 
       .sort((a, b) => a.localeCompare(b));
 
     if (imageFiles.length === 0) {
-      throw new Error(`gallery-dl berhasil jalan untuk Pinterest "${sourceLabel}", tapi tidak ada file gambar yang bisa dijadikan sticker.`);
+      throw new Error(`gallery-dl ran successfully for Pinterest "${sourceLabel}", but no image files were found to create a sticker.`);
     }
 
     const sourceFile = imageFiles[0];
@@ -326,7 +326,7 @@ export async function createPinterestStickers(options: PinterestStickerBatchOpti
       // No sort — keep gallery-dl's natural order which may vary
 
     if (imageFiles.length === 0) {
-      throw new Error('Tidak ada file gambar yang ditemukan dari Pinterest.');
+      throw new Error('No image files found from Pinterest.');
     }
 
     // Shuffle downloaded files and take up to `count`
@@ -349,13 +349,13 @@ export async function createPinterestStickers(options: PinterestStickerBatchOpti
           downloadedFiles: downloadedFiles.length,
         });
       } catch (stickerError) {
-        console.error(`[PinterestSticker] Gagal buat sticker dari ${filePath}:`, stickerError);
+        console.error(`[PinterestSticker] Failed to create sticker from ${filePath}:`, stickerError);
         // Skip failed stickers, continue with the rest
       }
     }
 
     if (stickers.length === 0) {
-      throw new Error('Gagal membuat sticker dari gambar-gambar yang didownload.');
+      throw new Error('Failed to create sticker from downloaded images.');
     }
 
     return {

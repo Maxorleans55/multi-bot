@@ -102,15 +102,15 @@ const pinterestStickerCommand: CommandModule = {
     const parsed = parseArgs(args);
     if (!parsed) {
       await context.socket.sendMessage(context.fromJid, {
-        text: '❌ Mohon berikan URL Pinterest atau kata kunci.\nUsage: !pinsticker <url/kata kunci> [-full|-cropped|-default] [-i nomor]',
+        text: '❌ Please provide a Pinterest URL or keyword.\nUsage: !pinsticker <url/keyword> [-full|-cropped|-default] [-i number]',
       });
       return;
     }
 
     await context.socket.sendMessage(context.fromJid, {
       text: parsed.query
-        ? `⏳ Mencari "${parsed.query}" di Pinterest dan membuat sticker...`
-        : '⏳ Mengambil gambar dari Pinterest dan membuat sticker...',
+        ? `⏳ Searching for "${parsed.query}" on Pinterest and creating sticker...`
+        : '⏳ Fetching image from Pinterest and creating sticker...',
     });
 
     try {

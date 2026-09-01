@@ -20,7 +20,7 @@ const instagramCommand: CommandModule = {
     }
 
     await context.socket.sendMessage(context.fromJid, {
-      text: '⏳ Mohon tunggu sebentar...',
+      text: '⏳ Please wait...',
     });
 
     const result = await instagramDownload(url);
@@ -56,7 +56,7 @@ const instagramCommand: CommandModule = {
     // post returned no direct stream. Don't silently send nothing.
     if (isVideo && urls.length === 0) {
       await context.socket.sendMessage(context.fromJid, {
-        text: '❌ Gagal mengunduh video Instagram: tidak ada stream video yang valid (codec tidak didukung atau post privat). Coba lagi, atau hubungi Owner bila masalah berlanjut.',
+        text: '❌ Failed to download Instagram video: no valid video stream found (unsupported codec or private post). Try again, or contact the Owner if the problem persists.',
       });
       return;
     }

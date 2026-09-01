@@ -334,7 +334,7 @@ async function doDownloadYoutube(params: DownloadParams): Promise<ToolExecuteRes
       : initialInfo;
 
     if (!info || !info.title) {
-      return { success: false, message: 'Gagal menemukan video YouTube dari URL atau judul yang diberikan.' };
+      return { success: false, message: 'Failed to find YouTube video from the given URL or title.' };
     }
 
     const title = info.title || 'Unknown';
@@ -431,12 +431,12 @@ async function doDownloadYoutube(params: DownloadParams): Promise<ToolExecuteRes
       error: error instanceof Error ? error.message : String(error),
     });
 
-    let errorMessage = 'Gagal mendownload dari YouTube.';
+    let errorMessage = 'Failed to download from YouTube.';
     if (typeof error === 'object' && error !== null && 'stderr' in error) {
       const stderr = String((error as { stderr?: unknown }).stderr ?? '');
-      if (stderr.includes('Video unavailable')) errorMessage = 'Video tidak tersedia atau telah dihapus.';
-      else if (stderr.includes('Private video')) errorMessage = 'Video ini bersifat privat.';
-      else if (stderr.includes('not available')) errorMessage = 'Video tidak tersedia di wilayah ini.';
+      if (stderr.includes('Video unavailable')) errorMessage = 'Video is unavailable or has been deleted.';
+      else if (stderr.includes('Private video')) errorMessage = 'This video is private.';
+      else if (stderr.includes('not available')) errorMessage = 'Video is not available in this region.';
     }
 
     return {

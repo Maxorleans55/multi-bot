@@ -5,7 +5,7 @@ const changelogCommand: CommandModule = {
   config: {
     name: 'changelog',
     aliases: ['cl', 'update', 'perubahan'],
-    description: 'Lihat apa aja yang baru di bot ini',
+    description: 'See what\'s new in the bot',
     usage: '!changelog',
     category: 'basic',
   },
@@ -15,138 +15,138 @@ const changelogCommand: CommandModule = {
 
     const text = `╭━━━━━━━━━━━━━━━━━━╮
 ┃      📋 *CHANGELOG*     
-┃   _Apa yang baru?_
+┃   _What's new?_
 ╰━━━━━━━━━━━━━━━━━━╯
 
-📅 *17 Agustus 2026*
+📅 *17 August 2026*
 
-╭━━━━━「 📨 *Sticker Pack Telegram* 」━━━━━╮
+╭━━━━━「 📨 *Telegram Sticker Pack* 」━━━━━╮
 ┃
-┃ • *Feat:* Ubah pack sticker Telegram
-┃   (t.me/addstickers) jadi sticker
-┃   pack WhatsApp.
+┃ • *Feat:* Convert Telegram sticker packs
+┃   (t.me/addstickers) into WhatsApp
+┃   sticker packs.
 ┃
-┃ • *Usage:* \`!tgstickerpack <url/nama>\`
+┃ • *Usage:* \`!tgstickerpack <url/name>\`
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 
-╭━━━━━「 📌 *Sticker Pack Pinterest* 」━━━━━╮
+╭━━━━━「 📌 *Pinterest Sticker Pack* 」━━━━━╮
 ┃
-┃ • *Feat:* Bikin banyak sticker dari
-┃   Pinterest sekaligus, dikirim jadi
-┃   satu sticker pack (maksimal 50).
+┃ • *Feat:* Create multiple stickers from
+┃   Pinterest at once, sent as one
+┃   sticker pack (max 50).
 ┃
 ┃ • *Usage:* \`!pinsticker <url/keyword>\`
-┃   atau minta langsung ke AI.
+┃   or ask the AI directly.
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 
-📅 *15 Agustus 2026*
+📅 *15 August 2026*
 
 ╭━━━━━「 📦 *Sticker Pack* 」━━━━━╮
 ┃
-┃ • *Feat:* Bikin & kirim *sticker pack*
-┃   langsung dari WhatsApp.
+┃ • *Feat:* Create & send *sticker packs*
+┃   directly from WhatsApp.
 ┃
-┃ • *Feat:* Dukung album — reply ke
-┃   beberapa media sekaligus jadi
-┃   satu pack (maksimal 60 sticker).
+┃ • *Feat:* Album support — reply to
+┃   multiple media at once to create
+┃   one pack (max 60 stickers).
 ┃
-┃ • *Usage:* \`!stickerpack <Nama|Publisher>\`
+┃ • *Usage:* \`!stickerpack <Name|Publisher>\`
 ┃   → \`!stickerpack add\` → \`!stickerpack send\`
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 
-📅 *14 Agustus 2026*
+📅 *14 August 2026*
 
-╭━━━━━「 🧠 *AI Lebih Cepat* 」━━━━━╮
+╭━━━━━「 🧠 *Faster AI* 」━━━━━╮
 ┃
-┃ • *Feat:* Mesin AI baru — respons
-┃   lebih cepat & stabil.
+┃ • *Feat:* New AI engine — faster &
+┃   more stable responses.
 ┃
-┃ • *Fix:* Pencarian web & baca
-┃   halaman nggak gampang gagal lagi.
+┃ • *Fix:* Web search & page reading
+┃   no longer fails easily.
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 
 ╭━━━━━「 📸 *Instagram Fix* 」━━━━━╮
 ┃
-┃ • *Fix:* Video yang gagal di upload ke story whatsapp (codec nggak cocok
-┃   WhatsApp) sekarang aman.
+┃ • *Fix:* Videos failing to upload to
+┃   WhatsApp story (codec mismatch)
+┃   are now safe.
 ┃
-┃ • *Fix:* Kalau download gagal, ada
-┃   pesan error yang jelas.
+┃ • *Fix:* Clear error messages when
+┃   download fails.
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 
-📅 *25 Juli 2026*
+📅 *25 July 2026*
 
-╭━━━━━「 💎 *Sistem Premium* 」━━━━━╮
+╭━━━━━「 💎 *Premium System* 」━━━━━╮
 ┃
-┃ • *Feat:* Tier baru — *free*,
+┃ • *Feat:* New tiers — *free*,
 ┃   *premium*, & *pro*.
 ┃
-┃ • *Feat:* Batas pemakaian AI &
-┃   command per hari per user.
+┃ • *Feat:* Daily AI & command usage
+┃   limits per user.
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 
-📅 *30 Juni 2026*
+📅 *30 June 2026*
 
 ╭━━━「 📸 *Instagram Download* 」━━━╮
 ┃
-┃ • *Fix:* Error "Gagal mengekstrak
-┃   URL media dari Instagram" pas
-┃   download Reels/foto/slide.
+┃ • *Fix:* "Failed to extract media URL
+┃   from Instagram" error when
+┃   downloading Reels/photos/slides.
 ┃
-┃ • *Fix:* Video Reels sekarang ada
-┃   suaranya, nggak sepi lagi.
+┃ • *Fix:* Reels videos now have audio.
 ┃
-┃ • *Fix:* AI mode juga udah bisa
-┃   download dari Instagram lagi.
-┃
-╰━━━━━━━━━━━━━━━━━━╯
-
-📅 *22 Juni 2026*
-
-╭━━━「 🔥 *Cari & Baca Web* 」━━━╮
-┃
-┃ • *Feat:* Bot bisa baca halaman
-┃   web — tinggal kirim URL, bot
-┃   bacain & kasih ringkasan.
-┃
-┃ • *Feat:* Cari info langsung dari
-┃   internet — harga emas, cuaca,
-┃   berita, tinggal tanya aja.
+┃ • *Fix:* AI mode can download from
+┃   Instagram again.
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 
-╭━━━「 🧠 *AI Makin Pinter* 」━━━╮
+📅 *22 June 2026*
+
+╭━━━「 🔥 *Web Search & Read* 」━━━╮
 ┃
-┃ • *Feat:* AI sekarang tau tanggal
-┃   & jam, jadi jawaban nggak
-┃   ngelantur tahun lalu.
+┃ • *Feat:* Bot can read web pages —
+┃   just send a URL and the bot
+┃   reads and summarizes it.
 ┃
-┃ • *Feat:* Search diatur biar
-┃   hasilnya paling baru & akurat.
-┃
-┃ • *Feat:* Fitur search & baca web
-┃   bisa dipake di grup juga.
+┃ • *Feat:* Search the internet directly
+┃   — gold prices, weather, news,
+┃   just ask.
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 
-╭━━━「 ⚙️ *Lainnya* 」━━━╮
+╭━━━「 🧠 *Smarter AI* 」━━━╮
 ┃
-┃ • *Style:* Bersihin & rapiin kode
-┃   biar lebih ringan & cepat.
+┃ • *Feat:* AI now knows the date &
+┃   time, so answers don't go off
+┃   track.
+┃
+┃ • *Feat:* Search optimized for the
+┃   latest & most accurate results.
+┃
+┃ • *Feat:* Search & web reading work
+┃   in groups too.
+┃
+╰━━━━━━━━━━━━━━━━━━╯
+
+╭━━━「 ⚙️ *Other* 」━━━╮
+┃
+┃ • *Style:* Cleaned up & optimized
+┃   code for better performance.
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯
 
 ╭━━━「 📌 *INFO* 」━━━╮
 ┃
-┃ ✦ Ketik \`${matchedPrefix}help\` buat
-┃   liat semua perintah.
-┃ ✦ Ada bug? Lapor lewat
+┃ ✦ Type \`${matchedPrefix}help\` to see
+┃   all commands.
+┃ ✦ Found a bug? Report via
 ┃   \`${matchedPrefix}reportbug\`
 ┃
 ╰━━━━━━━━━━━━━━━━━━╯`;

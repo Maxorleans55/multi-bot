@@ -59,7 +59,7 @@ async function handleInstagram(url: string, context: ToolContext) {
       if (isVideo && urls.length === 0) {
         return {
           success: false,
-          message: 'Gagal mengunduh video Instagram: tidak ada stream video yang valid (codec tidak didukung atau post privat).',
+          message: 'Failed to download Instagram video: no valid video stream found (unsupported codec or private post).',
         };
       }
 
@@ -85,14 +85,14 @@ async function handleInstagram(url: string, context: ToolContext) {
 
     return {
       success: true,
-      message: `Berhasil mendownload ${urls.length} ${isVideo ? 'video' : 'foto'} dari Instagram. Media sudah dikirim ke user.`,
+      message: `Successfully downloaded ${urls.length} ${isVideo ? 'video(s)' : 'photo(s)'} from Instagram. Media has been sent to user.`,
       data: { type: isVideo ? 'video' : 'image', urls },
     };
   }
 
   return {
     success: false,
-    message: result.message || 'Gagal mengambil media dari Instagram. Link mungkin tidak valid, privat, atau media tidak ditemukan.',
+    message: result.message || 'Failed to fetch media from Instagram. Link may be invalid, private, or media not found.',
   };
 }
 
@@ -113,14 +113,14 @@ async function handleFacebook(url: string, context: ToolContext) {
 
     return {
       success: true,
-      message: 'Berhasil mendownload video dari Facebook. Media sudah dikirim ke user.',
+      message: 'Successfully downloaded video from Facebook. Media has been sent to user.',
       data: { type: 'video', url: mediaUrl },
     };
   }
 
   return {
     success: false,
-    message: 'Gagal mengambil video dari Facebook. Link mungkin tidak valid, privat, atau video tidak ditemukan.',
+    message: 'Failed to fetch video from Facebook. Link may be invalid, private, or video not found.',
   };
 }
 
@@ -134,7 +134,7 @@ async function handleTwitter(url: string, context: ToolContext) {
     if (!info || !info.title) {
       return {
         success: false,
-        message: 'Gagal mendapatkan informasi tweet. URL mungkin tidak valid.',
+        message: 'Failed to get tweet info. URL may be invalid.',
       };
     }
 
@@ -144,7 +144,7 @@ async function handleTwitter(url: string, context: ToolContext) {
     if (!result.success || !result.filePath) {
       return {
         success: false,
-        message: result.error || 'Gagal mengunduh media dari Twitter/X.',
+        message: result.error || 'Failed to download media from Twitter/X.',
       };
     }
 
@@ -242,7 +242,7 @@ async function handleTiktok(url: string, context: ToolContext) {
 
       return {
         success: true,
-        message: `Berhasil mendownload ${data.images.length} foto dari TikTok. Media sudah dikirim ke user.`,
+        message: `Successfully downloaded ${data.images.length} photos from TikTok. Media has been sent to user.`,
         data: { type: 'images', count: data.images.length, urls: data.images },
       };
     }
@@ -297,7 +297,7 @@ export const definition: AIToolDefinition = {
 export const execute: ToolExecuteFunction = async (args, context) => {
   const url = args.url as string;
   if (!url) {
-    return { success: false, message: 'URL tidak diberikan.' };
+    return { success: false, message: 'URL not provided.' };
   }
 
   console.log(`[Tool:Social] 📥 Downloading: ${url}`);
@@ -306,7 +306,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
   if (!platform) {
     return {
       success: false,
-      message: 'URL tidak dikenali. Pastikan URL berasal dari TikTok, Instagram, Facebook, atau Twitter/X.',
+      message: 'URL not recognized. Make sure the URL is from TikTok, Instagram, Facebook, or Twitter/X.',
     };
   }
 

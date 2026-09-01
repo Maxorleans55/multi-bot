@@ -72,10 +72,10 @@ const command: CommandModule = {
       default:
         await context.socket.sendMessage(from, {
           text: `📋 *User Commands*\n\n` +
-            `*!user list active* — List user aktif (7 hari terakhir)\n` +
-            `*!user list inactive* — List user tidak aktif (>7 hari)\n` +
-            `*!user list all* — List semua user\n` +
-            `*!user stats* — Statistik user`,
+            `*!user list active* — List active users (last 7 days)\n` +
+            `*!user list inactive* — List inactive users (>7 days)\n` +
+            `*!user list all* — List all users\n` +
+            `*!user stats* — User statistics`,
         });
     }
   },

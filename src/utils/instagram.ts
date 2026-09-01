@@ -239,18 +239,18 @@ function getInstagramJson(url: string): Promise<YtDlpEntry[]> {
       if (error.code === 'ENOENT') {
         reject(
           new Error(
-            'yt-dlp tidak ditemukan. Install dulu dengan "pip install yt-dlp" atau set YTDLP_BIN.',
+            'yt-dlp not found. Install with "pip install yt-dlp" or set YTDLP_BIN.',
           ),
         );
         return;
       }
-      reject(new Error(`yt-dlp spawn gagal: ${error.message}`));
+      reject(new Error(`yt-dlp spawn failed: ${error.message}`));
     });
 
     child.on('close', (code) => {
       clearTimeout(timer);
       if (timedOut) {
-        reject(new Error(`yt-dlp timeout setelah ${getTimeoutMs() / 1000}s`));
+        reject(new Error(`yt-dlp timeout after ${getTimeoutMs() / 1000}s`));
         return;
       }
       if (code !== 0) {
@@ -260,7 +260,7 @@ function getInstagramJson(url: string): Promise<YtDlpEntry[]> {
       try {
         const lines = stdout.trim().split('\n').filter(Boolean);
         if (lines.length === 0) {
-          reject(new Error('yt-dlp tidak menghasilkan output'));
+          reject(new Error('yt-dlp produced no output'));
           return;
         }
         const parsed = lines.map((l) => JSON.parse(l) as YtDlpEntry);
@@ -320,13 +320,13 @@ function downloadMergedVideo(url: string, videoId: string): Promise<string> {
 
     child.on('error', (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
-      reject(new Error(`yt-dlp download spawn gagal: ${error.message}`));
+      reject(new Error(`yt-dlp download spawn failed: ${error.message}`));
     });
 
     child.on('close', (code) => {
       clearTimeout(timer);
       if (timedOut) {
-        reject(new Error(`yt-dlp download timeout setelah ${getTimeoutMs() / 1000}s`));
+        reject(new Error(`yt-dlp download timeout after ${getTimeoutMs() / 1000}s`));
         return;
       }
       if (code !== 0) {
@@ -336,7 +336,7 @@ function downloadMergedVideo(url: string, videoId: string): Promise<string> {
       if (existsSync(expectedPath)) {
         resolve(expectedPath);
       } else {
-        reject(new Error('File hasil merge tidak ditemukan setelah download.'));
+        reject(new Error('Merge file not found after download.'));
       }
     });
   });
@@ -349,7 +349,7 @@ function buildResult(entries: YtDlpEntry[]): {
 } {
   if (entries.length === 0) {
     return {
-      result: { status: false, message: 'Tidak ada media ditemukan di URL Instagram tersebut.' },
+      result: { status: false, message: 'No media found at this Instagram URL.' },
       needsMerge: false,
       mergeVideoId: null,
     };
@@ -406,7 +406,7 @@ function buildResult(entries: YtDlpEntry[]): {
     return {
       result: {
         status: false,
-        message: 'Gagal mengekstrak URL media dari Instagram. Post mungkin privat atau tidak ditemukan.',
+        message: 'Failed to extract media URL from Instagram. The post may be private or not found.',
       },
       needsMerge: false,
       mergeVideoId: null,

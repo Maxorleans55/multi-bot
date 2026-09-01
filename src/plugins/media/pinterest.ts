@@ -30,14 +30,14 @@ const pinterestCommand: CommandModule = {
   config: {
     name: 'pinterest',
     aliases: ['pin'],
-    description: 'Cari gambar di Pinterest. Bisa request multiple gambar: !pinterest <query> -count=5',
+    description: 'Search images on Pinterest. Can request multiple images: !pinterest <query> -count=5',
     usage: '!pinterest <query> [-sticker] [-count=N]',
     category: 'media',
   },
   handler: async function (context, args: string[]): Promise<void> {
     if (args.length === 0) {
       await context.socket.sendMessage(context.fromJid, {
-        text: '❌ Mohon berikan query pencarian. Usage: !pinterest <query> [-sticker] [-count=N]',
+        text: '❌ Please provide a search query. Usage: !pinterest <query> [-sticker] [-count=N]',
       });
       return;
     }
@@ -48,7 +48,7 @@ const pinterestCommand: CommandModule = {
     const isSticker = cleanArgs.includes('-sticker');
 
     await context.socket.sendMessage(context.fromJid, {
-      text: `⏳ Sedang mencari ${count} gambar "${query}" di Pinterest...`,
+      text: `⏳ Searching for ${count} images of "${query}" on Pinterest...`,
     });
 
     try {
@@ -56,7 +56,7 @@ const pinterestCommand: CommandModule = {
 
       if (results.length === 0) {
         await context.socket.sendMessage(context.fromJid, {
-          text: `❌ Tidak ditemukan hasil untuk "${query}"`,
+          text: `❌ No results found for "${query}"`,
         });
         return;
       }
@@ -65,7 +65,7 @@ const pinterestCommand: CommandModule = {
 
       if (isSticker) {
         await context.socket.sendMessage(context.fromJid, {
-          text: `⏳ Sedang membuat ${sendCount} sticker...`,
+          text: `⏳ Creating ${sendCount} stickers...`,
         });
 
         let successCount = 0;

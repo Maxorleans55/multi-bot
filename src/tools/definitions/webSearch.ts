@@ -55,7 +55,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
   const maxResults = Math.min(Math.max((args.maxResults as number) || 8, 3), 15);
 
   if (!query) {
-    return { success: false, message: 'Query pencarian tidak diberikan.' };
+    return { success: false, message: 'Search query not provided.' };
   }
 
   const firecrawlBase = getFirecrawlUrl();
@@ -63,7 +63,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     return {
       success: false,
       message:
-        'Web search tidak dapat digunakan karena FIRECRAWL_URL belum dikonfigurasi. Silakan set FIRECRAWL_URL di file .env.',
+        'Web search cannot be used because FIRECRAWL_URL is not configured. Please set FIRECRAWL_URL in the .env file.',
     };
   }
 
@@ -99,7 +99,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     if (results.length === 0) {
       return {
         success: false,
-        message: `Pencarian "${query}" tidak menemukan hasil.`,
+        message: `Search for "${query}" returned no results.`,
         data: { query, results: [] },
       };
     }
@@ -114,7 +114,7 @@ export const execute: ToolExecuteFunction = async (args, context) => {
 
     return {
       success: true,
-      message: `Hasil pencarian "${query}":\n\n${formatted}`,
+      message: `Search results for "${query}":\n\n${formatted}`,
       data: {
         query,
         source: 'Firecrawl',
@@ -141,20 +141,20 @@ export const execute: ToolExecuteFunction = async (args, context) => {
     if (status === 404) {
       return {
         success: false,
-        message: `Endpoint Firecrawl search tidak ditemukan (404) di ${getFirecrawlUrl()}/v2/search. Periksa konfigurasi FIRECRAWL_URL.`,
+        message: `Firecrawl search endpoint not found (404) at ${getFirecrawlUrl()}/v2/search. Check FIRECRAWL_URL configuration.`,
       };
     }
 
     if (status === 504) {
       return {
         success: false,
-        message: `Firecrawl search timeout (504) saat mencari "${query}". Server mungkin sibuk, coba lagi nanti.`,
+        message: `Firecrawl search timeout (504) while searching for "${query}". The server may be busy, please try again later.`,
       };
     }
 
     return {
       success: false,
-      message: `Gagal melakukan pencarian: ${error.message || 'Unknown error'}. Periksa server Firecrawl dan konfigurasi FIRECRAWL_URL.`,
+      message: `Search failed: ${error.message || 'Unknown error'}. Check the Firecrawl server and FIRECRAWL_URL configuration.`,
     };
   }
 };

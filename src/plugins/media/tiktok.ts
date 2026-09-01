@@ -117,18 +117,18 @@ const tiktokCommand: CommandModule = {
           }
         } else {
           await context.socket.sendMessage(context.fromJid, {
-            text: `❌ Tipe media tidak didukung: ${data.type}`,
+            text: `❌ Unsupported media type: ${data.type}`,
           });
         }
       } else {
         await context.socket.sendMessage(context.fromJid, {
-          text: `❌ Gagal mengunduh video dari TikTok.\n\n${result.message || 'Pastikan URL benar'}\n\nBila masalah berlanjut, silahkan hubungi Owner`,
+          text: `❌ Failed to download video from TikTok.\n\n${result.message || 'Please make sure the URL is correct'}\n\nIf the problem persists, please contact the Owner`,
         });
       }
     } catch (error) {
       console.error('Error downloading TikTok:', error);
       await context.socket.sendMessage(context.fromJid, {
-        text: '❌ Terjadi kesalahan saat mengunduh video TikTok. Silahkan coba lagi nanti.',
+        text: '❌ An error occurred while downloading the TikTok video. Please try again later.',
       });
     }
   },

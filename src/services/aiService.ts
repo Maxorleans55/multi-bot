@@ -34,7 +34,7 @@ interface StreamChunk {
 type StreamCallback = (chunk: StreamChunk) => void | Promise<void>;
 
 const MALFORMED_TOOL_CALL_FALLBACK =
-  "Maaf, pencarian gagal diproses. Silakan coba lagi sebentar.";
+  "Sorry, the search failed to process. Please try again in a moment.";
 // Tool-calling budget. Keep room beyond the expected tool calls so the model
 // still has steps to write its final answer — burning every step on tool calls
 // (e.g. 1 web_search + 2-3 web_fetch) yields empty final text.
@@ -180,7 +180,7 @@ export class AIService {
             return {
               success: true,
               message:
-                "Permintaan ini sudah diproses sebelumnya dengan hasil yang sama. Jangan memanggil tool yang sama berulang kali — langsung berikan jawaban final.",
+                "This request was already processed with the same result. Do not call the same tool repeatedly — provide the final answer directly.",
               data: previous.data,
             };
           }
@@ -386,7 +386,7 @@ export class AIService {
         } as Parameters<typeof streamText>[0]);
 
         // Live-stream via `fullStream` so we can emit a short acknowledgment
-        // ("siap, ditunggu ya") BEFORE a tool executes, and the final
+        // ("ready, please wait") BEFORE a tool executes, and the final
         // verification answer AFTER the tool has finished. `result.steps`
         // would only give us the buffered result, so the acknowledgment would
         // arrive after the media — the wrong order.

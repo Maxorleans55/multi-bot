@@ -28,7 +28,7 @@ export function loadConfig(): BotConfig {
     ownerNumbers: [],
     prefixes: ['!'],
     maintenance: false,
-    maintenanceMessage: '🔧 Bot sedang dalam maintenance. Silakan coba lagi nanti.',
+    maintenanceMessage: '🔧 Bot is under maintenance. Please try again later.',
   };
 
   // Try to load from config.json
@@ -81,7 +81,7 @@ export function isMaintenance(): boolean {
 }
 
 export function getMaintenanceMessage(): string {
-  return loadConfig().maintenanceMessage || '🔧 Bot sedang dalam maintenance. Silakan coba lagi nanti.';
+  return loadConfig().maintenanceMessage || '🔧 Bot is under maintenance. Please try again later.';
 }
 
 export default {

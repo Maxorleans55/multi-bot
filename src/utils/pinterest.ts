@@ -81,7 +81,7 @@ function runGalleryDlGetUrls(url: string): Promise<string[]> {
       if (error.code === 'ENOENT') {
         reject(
           new Error(
-            'gallery-dl tidak ditemukan. Install dulu dengan "python -m pip install -U gallery-dl" atau set PINTEREST_DL_BIN.',
+            'gallery-dl not found. Install with "python -m pip install -U gallery-dl" or set PINTEREST_DL_BIN.',
           ),
         );
         return;
@@ -92,7 +92,7 @@ function runGalleryDlGetUrls(url: string): Promise<string[]> {
     child.on('close', (code) => {
       clearTimeout(timer);
       if (timedOut) {
-        reject(new Error('gallery-dl timeout saat mengambil data dari Pinterest.'));
+        reject(new Error('gallery-dl timeout while fetching data from Pinterest.'));
         return;
       }
       if (code !== 0) {
@@ -176,7 +176,7 @@ function runGalleryDlGetUrlsFallback(url: string): Promise<string[]> {
       if (error.code === 'ENOENT') {
         reject(
           new Error(
-            'gallery-dl tidak ditemukan. Install dulu dengan "python -m pip install -U gallery-dl" atau set PINTEREST_DL_BIN.',
+            'gallery-dl not found. Install with "python -m pip install -U gallery-dl" or set PINTEREST_DL_BIN.',
           ),
         );
         return;
@@ -187,7 +187,7 @@ function runGalleryDlGetUrlsFallback(url: string): Promise<string[]> {
     child.on('close', (code) => {
       clearTimeout(timer);
       if (timedOut) {
-        reject(new Error('gallery-dl timeout saat mengambil data dari Pinterest.'));
+        reject(new Error('gallery-dl timeout while fetching data from Pinterest.'));
         return;
       }
       if (code !== 0) {
@@ -204,7 +204,7 @@ function runGalleryDlGetUrlsFallback(url: string): Promise<string[]> {
         .slice(0, MAX_RESULTS);
 
       if (urls.length === 0) {
-        reject(new Error('Tidak ada URL gambar yang ditemukan dari Pinterest.'));
+        reject(new Error('No image URLs found from Pinterest.'));
         return;
       }
 

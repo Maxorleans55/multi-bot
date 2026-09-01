@@ -38,7 +38,7 @@ export const definition: AIToolDefinition = {
 export const execute: ToolExecuteFunction = async (args, context) => {
   const query = args.query as string;
   if (!query) {
-    return { success: false, message: 'Query pencarian Pinterest tidak diberikan.' };
+    return { success: false, message: 'Pinterest search query not provided.' };
   }
 
   const count = typeof args.count === 'number' && args.count > 0
@@ -52,14 +52,14 @@ try {
     if (results.length === 0) {
       return {
         success: false,
-        message: `Tidak ditemukan hasil untuk pencarian "${query}" di Pinterest.`,
+        message: `No results found for Pinterest search "${query}".`,
       };
     }
 
     if (!context.socket || !context.fromJid) {
       return {
         success: true,
-        message: `Berhasil mencari gambar "${query}" di Pinterest. Ditemukan ${results.length} hasil.`,
+        message: `Successfully searched for images on Pinterest for "${query}". Found ${results.length} results.`,
         data: { query, totalResults: results.length, imageUrls: results.slice(0, count) },
       };
     }

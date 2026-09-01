@@ -6,14 +6,14 @@ const togglebotCommand: CommandModule = {
   config: {
     name: 'aigroup',
     aliases: ['gai', 'aiGroup'],
-    description: 'Aktifkan/nonaktifkan AI di grup ini',
+    description: 'Enable/disable AI in this group',
     usage: '!aigroup on / !aigroup off',
     category: 'group',
   },
   handler: async function (context, args: string[]): Promise<void> {
     if (!context.fromJid.endsWith('@g.us')) {
       await context.socket.sendMessage(context.fromJid, {
-        text: '❌ Perintah ini hanya bisa digunakan di grup.',
+        text: '❌ This command can only be used in groups.',
       });
       return;
     }
@@ -36,7 +36,7 @@ const togglebotCommand: CommandModule = {
 
     if (!isGroupAdmin) {
       await context.socket.sendMessage(context.fromJid, {
-        text: '❌ Hanya admin grup yang bisa menggunakan perintah ini.',
+        text: '❌ Only group admins can use this command.',
       });
       return;
     }
@@ -45,9 +45,9 @@ const togglebotCommand: CommandModule = {
     const currentStatus = isAIGroupEnabled(context.fromJid);
 
     if (!action || (action !== 'on' && action !== 'off')) {
-      const statusText = currentStatus ? '🟢 *Aktif*' : '🔴 *Nonaktif*';
+      const statusText = currentStatus ? '🟢 *Active*' : '🔴 *Inactive*';
       await context.socket.sendMessage(context.fromJid, {
-        text: `📋 *Status AI di Grup Ini:* ${statusText}\n\nGunakan:\n• \`${context.simplified?.prefix || '!'}aigroup on\` — Aktifkan AI\n• \`${context.simplified?.prefix || '!'}aigroup off\` — Nonaktifkan AI`,
+        text: `📋 *AI Status in This Group:* ${statusText}\n\nUsage:\n• \`${context.simplified?.prefix || '!'}aigroup on\` — Enable AI\n• \`${context.simplified?.prefix || '!'}aigroup off\` — Disable AI`,
       });
       return;
     }
@@ -55,24 +55,24 @@ const togglebotCommand: CommandModule = {
     if (action === 'on') {
       if (currentStatus) {
         await context.socket.sendMessage(context.fromJid, {
-          text: '🟢 AI sudah aktif di grup ini.',
+          text: '🟢 AI is already active in this group.',
         });
         return;
       }
       await setAIGroupEnabled(context.fromJid, true);
       await context.socket.sendMessage(context.fromJid, {
-        text: '🟢 AI telah *diaktifkan* di grup ini.',
+        text: '🟢 AI has been *enabled* in this group.',
       });
     } else {
       if (!currentStatus) {
         await context.socket.sendMessage(context.fromJid, {
-          text: '🔴 AI sudah nonaktif di grup ini.',
+          text: '🔴 AI is already inactive in this group.',
         });
         return;
       }
       await setAIGroupEnabled(context.fromJid, false);
       await context.socket.sendMessage(context.fromJid, {
-        text: '🔴 AI telah *dinonaktifkan* di grup ini.',
+        text: '🔴 AI has been *disabled* in this group.',
       });
     }
   },

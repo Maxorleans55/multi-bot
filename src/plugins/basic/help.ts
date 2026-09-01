@@ -1,6 +1,10 @@
 import type { CommandModule, CommandConfig } from '../../types/index.js';
 import { getPrefixes, isOwner } from '../../config/botConfig.js';
-import { log } from '../../utils/logger.js';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const categoryIcons: Record<string, string> = {
   basic: '📂',
@@ -12,14 +16,6 @@ const categoryIcons: Record<string, string> = {
   general: '📁',
 };
 
-const autoFeatureIcons: Record<string, string> = {
-  instagram: '📸',
-  tiktok: '🎵',
-  facebook: '📘',
-  twitter: '🐦',
-  youtube: '🎥',
-};
-
 interface CommandEntry {
   config: CommandConfig;
   plugin: string;
@@ -29,7 +25,7 @@ const helpCommand: CommandModule = {
   config: {
     name: 'help',
     aliases: ['h', 'menu'],
-    description: 'Tampilkan perintah yang tersedia',
+    description: 'Show all available commands',
     usage: '!help',
     category: 'basic',
   },
@@ -37,7 +33,7 @@ const helpCommand: CommandModule = {
     const pm = context.pluginManager;
     if (!pm) {
       await context.socket.sendMessage(context.fromJid, {
-        text: '❌ Plugin manager tidak tersedia',
+        text: '❌ Plugin manager not available',
       });
       return;
     }
@@ -64,27 +60,26 @@ const helpCommand: CommandModule = {
 ┃
 ┃ ${command.config.description}
 ┃
-┃ ✦ *Pakai:* \`${command.config.usage.replace('!', matchedPrefix)}\`${aliasesText}
-┃ ✦ *Kategori:* ${categoryIcons[command.config.category || ''] || '📁'} ${command.config.category || 'general'}
-┃ ✦ *Admin:* ${command.config.adminOnly ? '✅ Ya' : '❌ Tidak'}
-┃ ✦ *Owner:* ${command.config.ownerOnly ? '✅ Ya' : '❌ Tidak'}
-┃ ✦ *Premium:* ${command.config.premiumOnly ? '✅ Ya' : '❌ Tidak'}
+┃ ✦ *Usage:* \`${command.config.usage.replace('!', matchedPrefix)}\`${aliasesText}
+┃ ✦ *Category:* ${categoryIcons[command.config.category || ''] || '📁'} ${command.config.category || 'general'}
+┃ ✦ *Admin:* ${command.config.adminOnly ? '✅ Yes' : '❌ No'}
+┃ ✦ *Owner:* ${command.config.ownerOnly ? '✅ Yes' : '❌ No'}
+┃ ✦ *Premium:* ${command.config.premiumOnly ? '✅ Yes' : '❌ No'}
 ┃
-╰━━━━━━━━━━━━━━━━━━━━╯`;
+╰━━━━━━━━━━━━━━━━━━━╯`;
 
         await context.socket.sendMessage(context.fromJid, {
           text: helpText,
         });
       } else {
         await context.socket.sendMessage(context.fromJid, {
-          text: `❌ Perintah \`${matchedPrefix}${commandName}\` tidak ditemukan.`,
+          text: `❌ Command \`${matchedPrefix}${commandName}\` not found.`,
         });
       }
     } else {
       const categories = new Map<string, CommandEntry[]>();
 
       for (const cmd of allCommands) {
-        // Sembunyikan command khusus owner dari pengguna non-owner.
         if (cmd.config.ownerOnly && !isOwnerUser) {
           continue;
         }
@@ -96,28 +91,13 @@ const helpCommand: CommandModule = {
         categories.get(category)!.push(cmd);
       }
 
-      let helpText =
-`╭━━━━━━━━━━━━━━━━━━━╮
-┃    🤖 *BOT MENU*     
-┃   ✦ _Light Yagami_ ✦
-╰━━━━━━━━━━━━━━━━━━━╯
-
-`;
-
-      helpText +=
-`╭━━━「 ⚡ *AUTO FITUR* 」━━━╮
-┃
-${['Instagram', 'TikTok', 'Facebook', 'Twitter/X', 'YouTube'].map(p => `┃ ${autoFeatureIcons[p.toLowerCase().replace('/', '').replace('x', 'twitter')] || '🔗'} *${p}* — Auto download`).join('\n')}
-┃
-╰━━━━━━━━━━━━━━━━━━━╯
-
-`;
+      let menuText = '';
 
       for (const [category, commands] of categories.entries()) {
         const icon = categoryIcons[category] || '📁';
         const catName = category.charAt(0).toUpperCase() + category.slice(1);
 
-        helpText +=
+        menuText +=
 `╭━━━「 ${icon} *${catName}* 」━━━╮
 ┃
 ${commands.map(cmd => {
@@ -130,42 +110,27 @@ ${commands.map(cmd => {
 `;
       }
 
-      helpText +=
+      menuText +=
 `╭━━━「 📌 *INFO* 」━━━╮
 ┃
-┃ ✦ *Sesi:* ${context.sessionId}
+┃ ✦ *Session:* ${context.sessionId}
 ┃ ✦ *Prefix:* \`${matchedPrefix}\`
-┃ ✦ *Gunakan* \`${matchedPrefix}help <cmd>\` *untuk detail*
-┃
-╰━━━━━━━━━━━━━━━━━━━╯
-
-`;
-
-      helpText +=
-`╭━━━「 ⚖️ *SYARAT & KETENTUAN (S&K)* 」━━━╮
-┃
-┃ 1. Bot ini bersifat _otomatis_ & tanpa jaminan.
-┃ 2. Dilarang keras memakai bot untuk hal
-┃    _ilegal, spam, ataupun melanggar hukum_.
-┃ 3. Penyalahgunaan fitur menjadi tanggung jawab
-┃    _pengguna sepenuhnya_.
-┃ 4. Pemilik bot berhak _memblokir / membatasi_
-┃    akses pengguna tanpa pemberitahuan.
-┃ 5. Jangan pernah mengirimkan _data pribadi atau sensitif_
-┃    ke bot.
-┃ 6. Dengan memakai bot, kamu dianggap
-┃    _menyetujui_ seluruh ketentuan ini.
+┃ ✦ *Owner:* Max Shadows
+┃ ✦ *Use* \`${matchedPrefix}help <cmd>\` *for details*
 ┃
 ╰━━━━━━━━━━━━━━━━━━━╯`;
 
       try {
-        log.info(`[help] Sending menu to ${context.fromJid} (${helpText.length} chars)`);
+        const imagePath = join(__dirname, '..', '..', '..', 'public', 'light-yagami.png');
+        const imageBuffer = readFileSync(imagePath);
         await context.socket.sendMessage(context.fromJid, {
-          text: helpText,
+          image: imageBuffer,
+          caption: menuText,
         });
-        log.info(`[help] Menu sent successfully to ${context.fromJid}`);
-      } catch (err) {
-        log.error(`[help] FAILED to send menu to ${context.fromJid}:`, err as object);
+      } catch {
+        await context.socket.sendMessage(context.fromJid, {
+          text: menuText,
+        });
       }
     }
   },

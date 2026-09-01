@@ -62,7 +62,7 @@ async function downloadYouTubeMedia(context: CommandContext, url: string, format
   const startTime = Date.now();
 
   await context.socket.sendMessage(context.fromJid, {
-    text: '🔄 Mohon ditunggu, sedang memproses download...',
+    text: '🔄 Please wait, processing download...',
   });
 
   const tempDir = path.join(process.cwd(), 'temp');

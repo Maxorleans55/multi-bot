@@ -433,7 +433,7 @@ export class BotHandler {
         const jid = message.key?.remoteJid;
         if (jid) {
           await this.socket.sendMessage(jid, {
-            text: '❌ Terjadi kesalahan internal. Silakan coba lagi.',
+            text: '❌ An internal error occurred. Please try again.',
           });
         }
       } catch {
@@ -545,10 +545,10 @@ export class BotHandler {
               const groupAiCheck = await premiumService.checkGroupAiLimit(user_id);
               if (!groupAiCheck.allowed) {
                 const tierMsg = groupAiCheck.tier !== 'free'
-                  ? `\n\n💡 Kamu masih bisa upgrade ke tier lebih tinggi untuk menambah limit.`
-                  : `\n\n💡 Upgrade ke premium untuk mendapatkan 500 group AI chat/hari: ketik *!premium check*`;
+                  ? `\n\n💡 You can upgrade to a higher tier to increase your limit.`
+                  : `\n\n💡 Upgrade to premium for 500 group AI chats/day: type *!premium check*`;
                 await this.socket.sendMessage(from, {
-                  text: `❌ Limit group AI harian kamu habis (${groupAiCheck.limit}/hari). Coba lagi besok.${tierMsg}`,
+                  text: `❌ Your daily group AI limit is reached (${groupAiCheck.limit}/day). Try again tomorrow.${tierMsg}`,
                 });
                 return;
               }
@@ -585,7 +585,7 @@ export class BotHandler {
             // Reject image/video/audio messages — current AI model doesn't support media input
             if (simplified.isImage || simplified.isVideo || simplified.isAudio || simplified.isSticker) {
               await this.socket.sendMessage(from, {
-                text: '❌ AI saat ini hanya bisa memproses teks. Kirim pesan teks saja ya.',
+                text: '❌ AI currently only supports text messages. Please send text only.',
               });
               return;
             }
@@ -594,8 +594,8 @@ export class BotHandler {
               const privateAiCheck = await premiumService.checkPrivateAiLimit(user_id);
               if (!privateAiCheck.allowed) {
                 const tierMsg = privateAiCheck.tier !== 'free'
-                  ? `\n\n💡 Kamu masih bisa upgrade ke tier lebih tinggi.`
-                  : `\n\n💡 Upgrade ke premium: ketik *!premium check*`;
+                  ? `\n\n💡 You can upgrade to a higher tier.`
+                  : `\n\n💡 Upgrade to premium: type *!premium check*`;
                 await this.socket.sendMessage(from, {
                   text: `❌ Limit AI chat harian kamu habis (${privateAiCheck.limit}/hari). Coba lagi besok.${tierMsg}`,
                 });
@@ -658,7 +658,7 @@ export class BotHandler {
         } catch (error) {
           log.error(`[${this.sessionId}] ❌ Error handling button reply:`, error as object);
           if (from) {
-            await this.socket.sendMessage(from, { text: '❌ Gagal memproses tombol. Silakan coba lagi.' });
+            await this.socket.sendMessage(from, { text: '❌ Failed to process button. Please try again.' });
           }
           return;
         }
@@ -676,7 +676,7 @@ export class BotHandler {
           if (!cmdRateCheck.allowed) {
             log.debug(`[${this.sessionId}] ⏱ Rate-limited command "${command}" from ${user_id}`);
             await this.socket.sendMessage(from, {
-              text: `⏱ Mohon tunggu ${Math.ceil(cmdRateCheck.remainingMs / 1000)} detik sebelum menggunakan perintah \`${command}\` lagi.`,
+              text: `⏱ Please wait ${Math.ceil(cmdRateCheck.remainingMs / 1000)}s before using \`${command}\` again.`,
             });
             return;
           }
@@ -688,10 +688,10 @@ export class BotHandler {
           if (!limitCheck.allowed) {
             log.info(`[${this.sessionId}] 🚫 Premium command limit reached for "${command}" by ${effectiveUserId.split('@')[0]} (tier: ${limitCheck.tier})`);
             await this.socket.sendMessage(from, {
-              text: `⚠️ Limit harian kamu untuk perintah *${command}* sudah habis.\n\n` +
+              text: `⚠️ Your daily limit for command *${command}* has been reached.\n\n` +
                 `📊 Tier: *${limitCheck.tier.toUpperCase()}*\n` +
-                `🔄 Reset: besok jam 00:00 WIB\n\n` +
-                `💎 Upgrade ke tier Premium/Pro untuk limit lebih tinggi.`,
+                `🔄 Reset: tomorrow at 00:00\n\n` +
+                `💎 Upgrade to Premium/Pro tier for higher limits.`,
             });
             return;
           }
@@ -726,7 +726,7 @@ export class BotHandler {
           log.error(`[${this.sessionId}] ❌ Error executing command "${command}":`, error as object);
           try {
             await this.socket.sendMessage(from, {
-              text: '❌ Terjadi kesalahan saat menjalankan perintah. Silakan coba lagi.',
+              text: '❌ An error occurred while running the command. Please try again.',
             });
           } catch {
             // Last-resort recovery — swallow send failure
@@ -741,7 +741,7 @@ export class BotHandler {
         const from = simplified.from;
         if (from) {
           await this.socket.sendMessage(from, {
-            text: '❌ Terjadi kesalahan internal yang tidak terduga. Silakan coba lagi.',
+            text: '❌ An unexpected internal error occurred. Please try again.',
           });
         }
       } catch {
@@ -837,17 +837,17 @@ export class BotHandler {
       let userFriendlyMessage: string;
 
       if (errorMessage.includes('empty after all retries') || errorMessage.includes('empty response')) {
-        userFriendlyMessage = '❌ Ga bisa jawab itu, coba kata-kata lain deh.';
+        userFriendlyMessage = '❌ Sorry, I cannot answer that. Try rephrasing your question.';
         log.error(`[${this.sessionId}] ❌ AI empty response (group):`, error as object);
       } else if (errorMessage.includes('timeout') || errorMessage.includes('timedout') || errorMessage.includes('econnrefused')) {
-        userFriendlyMessage = '❌ Layanan AI lagi rame. Coba sebentar lagi ya.';
+        userFriendlyMessage = '❌ AI service is busy. Please try again in a moment.';
       } else if (errorMessage.includes('api key') || errorMessage.includes('unauthorized') || errorMessage.includes('401')) {
-        userFriendlyMessage = '❌ Konfigurasi AI salah. Hubungi owner.';
+        userFriendlyMessage = '❌ AI configuration error. Please contact the owner.';
         log.error(`[${this.sessionId}] ❌ AI Configuration error:`, error as object);
       } else if (errorMessage.includes('rate limit') || errorMessage.includes('429') || errorMessage.includes('too many')) {
-        userFriendlyMessage = '❌ Kebanyakan yang nanya. Tunggu bentar ya.';
+        userFriendlyMessage = '❌ Too many requests. Please wait a moment.';
       } else {
-        userFriendlyMessage = '❌ Lagi error nih, coba lagi bentar.';
+        userFriendlyMessage = '❌ Something went wrong. Please try again later.';
         log.error(`[${this.sessionId}] ❌ Group Auto-Reply Error:`, error as object);
       }
 
@@ -936,17 +936,17 @@ export class BotHandler {
       let userFriendlyMessage: string;
 
       if (errorMessage.includes('empty after all retries') || errorMessage.includes('empty response')) {
-        userFriendlyMessage = '❌ Maaf, saat ini tidak dapat memproses permintaan yang diinginkan. Silakan coba lagi nanti.';
+        userFriendlyMessage = '❌ Sorry, I cannot process your request right now. Please try again later.';
         log.error(`[${this.sessionId}] ❌ AI empty response:`, error as object);
       } else if (errorMessage.includes('timeout') || errorMessage.includes('timedout') || errorMessage.includes('econnrefused')) {
-        userFriendlyMessage = '❌ Maaf, layanan AI sedang sibuk. Silakan coba lagi nanti.';
+        userFriendlyMessage = '❌ AI service is busy. Please try again later.';
       } else if (errorMessage.includes('api key') || errorMessage.includes('unauthorized') || errorMessage.includes('401')) {
-        userFriendlyMessage = '❌ Maaf, terjadi kesalahan konfigurasi AI. Mohon hubungi owner.';
+        userFriendlyMessage = '❌ AI configuration error. Please contact the owner.';
         log.error(`[${this.sessionId}] ❌ AI Configuration error:`, error as object);
       } else if (errorMessage.includes('rate limit') || errorMessage.includes('429') || errorMessage.includes('too many')) {
-        userFriendlyMessage = '❌ Maaf, permintaan terlalu banyak. Silakan tunggu sebentar dan coba lagi.';
+        userFriendlyMessage = '❌ Too many requests. Please wait a moment and try again.';
       } else {
-        userFriendlyMessage = '❌ Maaf, sedang terjadi kendala teknis. Silakan coba lagi nanti.';
+        userFriendlyMessage = '❌ A technical error occurred. Please try again later.';
         log.error(`[${this.sessionId}] ❌ AI Error:`, error as object);
       }
 

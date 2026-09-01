@@ -59,7 +59,7 @@ const command: CommandModule = {
             : (context.simplified?.user_id || from);
         const user = await userService.getUser(checkJid);
         if (!user) {
-          await context.socket.sendMessage(from, { text: '❌ User tidak ditemukan di database.' });
+          await context.socket.sendMessage(from, { text: '❌ User not found in database.' });
           return;
         }
         const tierConfig = premiumService.getTierConfig(user.tier);
@@ -67,12 +67,12 @@ const command: CommandModule = {
         const lines = [
           `📊 *Status User*`,
           `├ ID: \`${user.userId.split('@')[0]}\``,
-          `├ Nama: ${user.pushName || '(tidak diketahui)'}`,
+          `├ Name: ${user.pushName || '(unknown)'}`,
           `├ Tier: *${user.tier.toUpperCase()}*`,
-          user.premiumExpiry ? `├ Premium sampai: ${user.premiumExpiry.toLocaleDateString('id-ID')}` : `├ Status: ${user.tier === 'free' ? 'Pengguna Gratis' : 'Premium (no expiry)'}`,
+          user.premiumExpiry ? `├ Premium until: ${user.premiumExpiry.toLocaleDateString('en-US')}` : `├ Status: ${user.tier === 'free' ? 'Free User' : 'Premium (no expiry)'}`,
           `├ Status: ${user.status}`,
           ``,
-          `📈 *Pemakaian Hari Ini*`,
+          `📈 *Today's Usage*`,
           `├ Private AI: ${usage.aiChatCount}/${tierConfig.dailyAiChatLimit === Number.MAX_SAFE_INTEGER ? '∞' : tierConfig.dailyAiChatLimit}`,
           `├ Group AI: ${usage.groupAiCount}/${tierConfig.dailyGroupAiLimit === Number.MAX_SAFE_INTEGER ? '∞' : tierConfig.dailyGroupAiLimit}`,
           `└ Command: ${usage.commandCount}/${tierConfig.dailyCommandLimit === Number.MAX_SAFE_INTEGER ? '∞' : tierConfig.dailyCommandLimit}`,
