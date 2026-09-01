@@ -458,6 +458,21 @@ export class SessionManager {
         log.info(`📦 [SessionManager] Found ${sessionIds.length} session(s) in database`);
       }
 
+      // If forceClear, delete old session auth data instead of reconnecting them
+      if (forceClear && filtered.length > 0) {
+        log.info(`🧹 [SessionManager] forceClear mode: wiping auth data for ${filtered.length} old session(s)`);
+        for (const sid of filtered) {
+          await prisma.waAuthState.deleteMany({ where: { sessionId: sid } });
+          await prisma.waSession.upsert({
+            where: { sessionId: sid },
+            update: { isActive: false, status: 'disconnected' },
+            create: { sessionId: sid, isActive: false, status: 'disconnected' },
+          });
+          log.info(`🧹 [SessionManager] Wiped auth for old session: ${sid}`);
+        }
+        return;
+      }
+
       for (const sid of filtered) {
         log.info(`Loading session: ${sid}`);
         await this.createSession(sid, forceClear);

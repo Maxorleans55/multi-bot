@@ -131,9 +131,11 @@ export class BotHandler {
 
     /* ============ Meta User ============ */
     const rawUserId = isGroup
-      ? (msg?.key as any)?.participantAlt as string
-      : (msg?.key as any)?.remoteJidAlt as string;
-    const user_id = rawUserId?.replace(/:\d+@s\.whatsapp\.net$/, '@s.whatsapp.net');
+      ? (msg?.key as any)?.participant
+      : (msg?.key as any)?.remoteJid;
+    const user_id = typeof rawUserId === 'string'
+      ? rawUserId.replace(/:\d+@s\.whatsapp\.net$/, '@s.whatsapp.net')
+      : undefined;
     const pushName = msg.pushName;
 
     /* ============ Meta Group ============= */
