@@ -91,11 +91,36 @@ body {
 }
 .hero h1 {
     font-size: 36px; font-weight: 700;
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.word { display: inline-flex; }
+.letter {
+    display: inline-block;
     background: linear-gradient(135deg, #fff 0%, #e63946 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin-bottom: 4px;
+    opacity: 0;
+    transform: translateY(30px) rotateX(-90deg);
+    animation: letterIn 0.5s forwards;
+    text-shadow: none;
+}
+@keyframes letterIn {
+    0% { opacity: 0; transform: translateY(30px) rotateX(-90deg) scale(0.5); }
+    60% { opacity: 1; transform: translateY(-5px) rotateX(10deg) scale(1.05); }
+    100% { opacity: 1; transform: translateY(0) rotateX(0) scale(1); }
+}
+.letter.space { width: 12px; }
+.letter.bounce {
+    animation: letterIn 0.5s forwards, letterBounce 2s ease-in-out 0.5s infinite;
+}
+@keyframes letterBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
 }
 .hero p { font-size: 13px; color: #888; letter-spacing: 2px; text-transform: uppercase; }
 

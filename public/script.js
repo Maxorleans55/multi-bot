@@ -3,6 +3,37 @@ let pollInterval = null;
 let musicPlaying = false;
 let sessions = new Map();
 
+// Animated title
+function animateTitle() {
+    const words = [
+        { el: document.getElementById('wordLight'), text: 'LIGHT', startDelay: 0 },
+        { el: document.getElementById('wordYagami'), text: 'YAGAMI', startDelay: 500 }
+    ];
+    words.forEach(({ el, text, startDelay }) => {
+        el.innerHTML = '';
+        text.split('').forEach((ch, i) => {
+            const span = document.createElement('span');
+            span.className = ch === ' ' ? 'letter space' : 'letter';
+            span.textContent = ch;
+            span.style.animationDelay = `${startDelay + i * 0.08}s`;
+            el.appendChild(span);
+        });
+    });
+    // Add bounce after initial animation
+    setTimeout(() => {
+        document.querySelectorAll('.letter:not(.space)').forEach((el, i) => {
+            el.style.animationDelay = `${i * 0.15}s`;
+            el.classList.add('bounce');
+        });
+    }, 2000);
+}
+
+// Restart animation every 6 seconds
+function startTitleLoop() {
+    animateTitle();
+    setInterval(animateTitle, 6000);
+}
+
 // Music - start muted, unmute on first click
 const bgm = document.getElementById('bgm');
 if (bgm) {
@@ -297,6 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Init
+startTitleLoop();
 loadStatus();
 loadSessions();
 setInterval(loadStatus, 10000);
